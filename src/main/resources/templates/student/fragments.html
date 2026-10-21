@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title th:text="${title} + ' · CCTV 촬영 동의'">CCTV 촬영 동의</title>
+	<link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body>
+<header th:fragment="nav(student)" class="topbar">
+	<a class="brand" th:href="@{/consents}">CCTV 촬영 동의</a>
+	<nav>
+		<span class="muted" th:text="|${student.name} (${student.studentId})|">홍길동 (20011234)</span>
+		<form th:action="@{/logout}" method="post">
+			<button type="submit" class="link">로그아웃</button>
+		</form>
+	</nav>
+</header>
+
+<!-- 동의서 본문: 원본 PDF(consent_ko.pdf, consent_en.pdf)와 같은 내용 -->
+<article th:fragment="document(lang)" class="consent-doc">
+	<th:block th:if="${lang == 'en'}">
+		<h2>Consent to CCTV Recording and Use</h2>
+		<p>Sejong University is committed to complying with the personal information protection provisions of the
+			Personal Information Protection Act and other relevant laws, and to doing its utmost to protect the
+			personal information of its users. Pursuant to Article 15(1) of the Personal Information Protection Act,
+			we hereby inform you that your personal information may be collected and used as described below while
+			you use Sejong University. Please give your consent accordingly.</p>
+		<h3>Consent to the Collection and Use of Personal Information</h3>
+		<dl>
+			<dt>Items Collected</dt>
+			<dd>CCTV footage recorded within the facilities</dd>
+			<dt>Purpose of Collection and Use</dt>
+			<dd>Student safety, facility inspection, and prevention of theft and crime, etc.</dd>
+			<dt>Period of Retention and Use</dt>
+			<dd>Retained for 60 days and then destroyed</dd>
+			<dt>How to Request Access</dt>
+			<dd>Contact and apply to the Office of Construction and Development, Sejong University (02-3408-3100)</dd>
+		</dl>
+		<p>You have the right to refuse consent to the provision of the above video information.
+			However, if you refuse, the information you receive from the University may be restricted.</p>
+	</th:block>
+	<th:block th:unless="${lang == 'en'}">
+		<h2>CCTV 촬영 및 이용 동의서</h2>
+		<p>세종대학교에서는 개인정보보호법 등 관련 법령 상 개인정보보호 규정 준수 및 이용자의 개인정보보호에 최선을 다하고 있습니다.
+			개인정보보호법 제15조 1항에 따라 세종대학교를 이용함에 있어 아래와 같이 귀하의 개인정보가 수집 및 이용될 수 있음을
+			안내드리오니 동의하여 주시기 바랍니다.</p>
+		<h3>개인정보 수집 및 이용에 대한 동의</h3>
+		<dl>
+			<dt>수집 항목</dt>
+			<dd>시설 내 CCTV 촬영 영상</dd>
+			<dt>수집 이용 목적</dt>
+			<dd>학생 안전 및 시설 점검, 도난 및 범죄 예방 등</dd>
+			<dt>개인정보 보유 및 이용 기간</dt>
+			<dd>60일 보관 후 폐기</dd>
+			<dt>열람 방법</dt>
+			<dd>세종대학교 건설개발과에 문의 (02-3408-3100) 및 신청</dd>
+		</dl>
+		<p>위와 같은 영상정보 제공에 동의하지 않을 권리가 있습니다.
+			다만, 거부할 경우 학교에서 제공받는 정보에 제한을 받을 수 있습니다.</p>
+	</th:block>
+</article>
+</body>
+</html>

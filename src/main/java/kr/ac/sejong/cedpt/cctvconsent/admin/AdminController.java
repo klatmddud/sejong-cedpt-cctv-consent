@@ -1,5 +1,6 @@
 package kr.ac.sejong.cedpt.cctvconsent.admin;
 
+import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDate;
@@ -8,6 +9,8 @@ import kr.ac.sejong.cedpt.cctvconsent.roster.RosterParseException;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.LockedException;
+import org.springframework.security.web.WebAttributes;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,7 +35,12 @@ class AdminController {
 	}
 
 	@GetMapping("/login")
-	String login() {
+	String login(HttpSession session, Model model) {
+		Object error = session.getAttribute(WebAttributes.AUTHENTICATION_EXCEPTION);
+		if (error instanceof LockedException ex) {
+			model.addAttribute("loginError", ex.getMessage());
+		}
+		session.removeAttribute(WebAttributes.AUTHENTICATION_EXCEPTION);
 		return "admin/login";
 	}
 

@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  * 요청, 리다이렉트, 쿠키는 https://*.sejong.ac.kr 로만 제한한다.
  */
 @Component
-public class SejongPortalClient {
+public class SejongPortalClient implements StudentAuthenticator {
 
 	private static final URI PORTAL_URI = URI.create("https://portal.sejong.ac.kr");
 	private static final URI LOGIN_URI = URI.create("https://portal.sejong.ac.kr/jsp/login/login_action.jsp");
@@ -45,6 +45,7 @@ public class SejongPortalClient {
 		SejongTls.allowLegacyRsaCipher();
 	}
 
+	@Override
 	public SejongStudent authenticate(String studentId, String password) {
 		if (isBlank(studentId) || isBlank(password)) {
 			throw new SejongAuthException(SejongAuthException.Reason.INVALID_CREDENTIALS, "학번과 비밀번호를 입력하세요.");

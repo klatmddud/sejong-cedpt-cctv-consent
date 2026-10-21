@@ -27,6 +27,7 @@ dependencies {
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	implementation 'org.jsoup:jsoup:1.21.1'
 	implementation 'org.dhatim:fastexcel-reader:0.19.0'
+	implementation 'org.apache.pdfbox:pdfbox:3.0.7'
 	runtimeOnly 'org.postgresql:postgresql'
 
 	// 로컬 실행(local 프로필) 전용: Docker 없이 PostgreSQL을 띄우고, 코드 수정 시 자동 재시작. 배포 jar에는 포함되지 않는다.
