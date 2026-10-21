@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title th:text="${title} + ' · CCTV 동의서 관리'">CCTV 동의서 관리</title>
+	<link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body>
+<header th:fragment="nav(active)" class="topbar">
+	<a class="brand" th:href="@{/admin}">CCTV 동의서 관리</a>
+	<nav>
+		<a th:href="@{/admin}" th:classappend="${active == 'dashboard'} ? 'active'">학기 현황</a>
+		<a th:href="@{/admin/roster}" th:classappend="${active == 'roster'} ? 'active'">명부 업로드</a>
+		<form th:action="@{/admin/logout}" method="post">
+			<button type="submit" class="link">로그아웃</button>
+		</form>
+	</nav>
+</header>
+
+<section th:fragment="uploads(uploads)" class="card">
+	<h2>최근 업로드</h2>
+	<p class="muted" th:if="${#lists.isEmpty(uploads)}">아직 올린 명부가 없습니다.</p>
+	<div class="table-wrap" th:unless="${#lists.isEmpty(uploads)}">
+		<table>
+			<thead>
+			<tr>
+				<th>일시</th>
+				<th>학기</th>
+				<th>파일</th>
+				<th class="num">수업</th>
+				<th class="num">동의 대상</th>
+				<th class="num">추가</th>
+				<th class="num">제외</th>
+			</tr>
+			</thead>
+			<tbody>
+			<tr th:each="upload : ${uploads}">
+				<td th:text="${#temporals.format(upload.uploadedAt.atZoneSameInstant(T(java.time.ZoneId).of('Asia/Seoul')), 'yyyy-MM-dd HH:mm')}">2026-09-01 10:00</td>
+				<td th:text="${upload.semester}">2026-2학기</td>
+				<td class="file" th:text="${upload.fileName}">명부.xlsx</td>
+				<td class="num" th:text="${upload.courseCount}">56</td>
+				<td class="num" th:text="${upload.enrollmentCount}">1789</td>
+				<td class="num" th:text="${upload.addedCount}">0</td>
+				<td class="num" th:text="${upload.removedCount}">0</td>
+			</tr>
+			</tbody>
+		</table>
+	</div>
+</section>
+</body>
+</html>

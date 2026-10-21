@@ -53,6 +53,7 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             # Fail before removing the running container if server secrets are missing
             test -f "$HOME/cctv-consent/app.env" || { echo "missing ~/cctv-consent/app.env (see deploy/README.md)"; exit 1; }
+            grep -q '^ADMIN_PASSWORD_HASH=\$2' "$HOME/cctv-consent/app.env" || { echo "ADMIN_PASSWORD_HASH missing in app.env (see deploy/README.md)"; exit 1; }
             docker pull "$IMAGE:${{ github.sha }}"
             # Caddy (deploy/Caddyfile) terminates HTTPS and proxies to this container over the "web" network
             docker network inspect web >/dev/null 2>&1 || docker network create web

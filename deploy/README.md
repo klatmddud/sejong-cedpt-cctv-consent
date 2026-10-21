@@ -11,7 +11,27 @@ Oracle Cloud Ubuntu 24.04 (x86_64, RAM 1GB, swap 4GB) 한 대에 컨테이너 3�
 비밀 값은 서버에만 있고 저장소와 GitHub에는 없다.
 
 - `~/cctv-consent/db.env`: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` (DB 컨테이너용)
-- `~/cctv-consent/app.env`: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (앱 컨테이너용, `deploy.yml`이 `--env-file`로 전달)
+- `~/cctv-consent/app.env`: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` (앱 컨테이너용, `deploy.yml`이 `--env-file`로 전달)
+
+## 관리자 계정 설정·변경
+
+관리자 페이지(`/admin`)는 공용 계정 하나로 로그인한다. 비밀번호는 BCrypt 해시로만 서버에 둔다.
+담당자가 바뀌면 같은 방법으로 비밀번호를 바꾼다.
+
+1. 서버에서 해시를 만든다. 비밀번호를 두 번 입력하면 `$2a$14$...` 형태의 해시가 출력된다.
+   입력한 비밀번호는 화면과 셸 기록에 남지 않는다.
+   ```bash
+   docker exec -it caddy caddy hash-password
+   ```
+2. `~/cctv-consent/app.env`를 열어(`nano ~/cctv-consent/app.env`) 아래 두 줄을 넣거나 바꾼다.
+   ```
+   ADMIN_USERNAME=관리자 아이디
+   ADMIN_PASSWORD_HASH=1번에서 출력된 해시
+   ```
+3. 컨테이너를 다시 만들어야 반영된다(`docker restart`는 env 파일을 다시 읽지 않음).
+   GitHub Actions에서 마지막 배포 실행을 Re-run 하거나 `main`에 push 한다.
+
+`ADMIN_PASSWORD_HASH`가 없으면 배포가 기존 앱을 내리기 전에 중단된다.
 
 ## 처음 설정 (한 번만)
 

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('관리자 로그인')}"></head>
+<body class="center">
+<main class="card login">
+	<h1>CCTV 동의서 관리</h1>
+	<p class="muted">세종대학교 컴퓨터공학과 조교·학과 사무실</p>
+
+	<p class="alert error" th:if="${param.error}">아이디 또는 비밀번호가 올바르지 않습니다.</p>
+	<p class="alert ok" th:if="${param.logout}">로그아웃했습니다.</p>
+
+	<form th:action="@{/admin/login}" method="post">
+		<label>아이디
+			<input type="text" name="username" autocomplete="username" required autofocus>
+		</label>
+		<label>비밀번호
+			<input type="password" name="password" autocomplete="current-password" required>
+		</label>
+		<button type="submit" class="primary">로그인</button>
+	</form>
+</main>
+</body>
+</html>

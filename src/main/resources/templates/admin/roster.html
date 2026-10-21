@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('명부 업로드')}"></head>
+<body>
+<header th:replace="~{admin/fragments :: nav('roster')}"></header>
+<main class="page">
+	<section class="card">
+		<h2>수강명부 업로드</h2>
+
+		<div class="alert ok" th:if="${result}" th:object="${result}">
+			<strong th:text="*{year} + '-' + *{term} + '학기 명부를 반영했습니다.'">2026-2학기 명부를 반영했습니다.</strong>
+			<span th:text="|수업 *{courseCount}개 · 동의 대상 *{enrollmentCount}건 · 학생 *{studentCount}명 · 추가 *{addedCount}건 · 제외 *{removedCount}건|">
+				수업 56개 · 동의 대상 1789건 · 학생 1156명 · 추가 1789건 · 제외 0건
+			</span>
+		</div>
+		<p class="alert error" th:if="${error}" th:text="${error}">명부 내용이 맞지 않는 과목이 있습니다.</p>
+
+		<form th:action="@{/admin/roster}" method="post" enctype="multipart/form-data" class="upload">
+			<label>수강명부 (xlsx)
+				<input type="file" name="file" accept=".xlsx" required>
+			</label>
+			<label>학기 종료일
+				<input type="date" name="endsOn" required>
+				<small class="muted">동의서는 학기 종료일로부터 1년 뒤 일괄 파기됩니다.</small>
+			</label>
+			<button type="submit" class="primary">업로드</button>
+		</form>
+
+		<ul class="notes muted">
+			<li>학사 시스템에서 내려받은 컴퓨터공학과 전체 수강명부(출석부 형식)를 그대로 올리세요.</li>
+			<li>강의실이 B201, B202, B203, B206, B207인 수업만 동의 대상으로 저장됩니다.</li>
+			<li>같은 학기 명부를 다시 올리면 새 학생만 추가되고, 이미 받은 동의는 그대로 유지됩니다.</li>
+		</ul>
+	</section>
+
+	<section th:replace="~{admin/fragments :: uploads(${uploads})}"></section>
+</main>
+</body>
+</html>

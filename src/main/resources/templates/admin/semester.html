@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head(${semester.label()})}"></head>
+<body>
+<header th:replace="~{admin/fragments :: nav('dashboard')}"></header>
+<main class="page">
+	<section class="card">
+		<p class="breadcrumb"><a th:href="@{/admin}">학기 현황</a> /</p>
+		<h2 th:text="${semester.label()}">2026-2학기</h2>
+		<p class="muted"
+		   th:text="|수업 ${semester.courseCount}개 · 동의 대상 ${semester.enrollmentCount}건 · 파기 예정일 ${semester.purgeOn}|">
+			수업 56개 · 동의 대상 1789건 · 파기 예정일 2027-12-21
+		</p>
+		<div class="table-wrap">
+			<table>
+				<thead>
+				<tr>
+					<th>강의실</th>
+					<th>학수번호</th>
+					<th>과목명</th>
+					<th>담당교수</th>
+					<th>강의시간</th>
+					<th class="num">학생</th>
+				</tr>
+				</thead>
+				<tbody>
+				<tr th:each="course : ${courses}">
+					<td th:text="${course.room}">센B201</td>
+					<td th:text="${course.code}">000304-001</td>
+					<td th:text="${course.name}">공업수학1</td>
+					<td th:text="${course.professor}">홍길동</td>
+					<td th:text="${course.schedule}">월10:30-12:00</td>
+					<td class="num" th:text="${course.studentCount}">19</td>
+				</tr>
+				</tbody>
+			</table>
+		</div>
+	</section>
+</main>
+</body>
+</html>

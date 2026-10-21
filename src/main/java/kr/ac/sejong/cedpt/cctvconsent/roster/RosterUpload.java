@@ -58,6 +58,10 @@ public class RosterUpload {
 		return id;
 	}
 
+	public Semester getSemester() {
+		return semester;
+	}
+
 	public String getFileName() {
 		return fileName;
 	}

@@ -29,7 +29,20 @@ interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 	@Query("select e from Enrollment e join fetch e.course c where c.semester = :semester")
 	List<Enrollment> findBySemester(Semester semester);
 
+	@Query("select count(e) from Enrollment e where e.course.semester = :semester and e.inLatestRoster = true")
+	long countActiveBySemester(Semester semester);
+
+	/** [course id, 학생 수] */
+	@Query("""
+			select e.course.id, count(e) from Enrollment e
+			where e.course.semester = :semester and e.inLatestRoster = true
+			group by e.course.id""")
+	List<Object[]> countActiveByCourse(Semester semester);
+
 }
 
 interface RosterUploadRepository extends JpaRepository<RosterUpload, Long> {
+
+	List<RosterUpload> findTop10ByOrderByUploadedAtDesc();
+
 }

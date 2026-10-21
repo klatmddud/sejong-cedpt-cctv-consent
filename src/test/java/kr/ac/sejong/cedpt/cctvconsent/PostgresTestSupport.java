@@ -11,6 +11,11 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 public abstract class PostgresTestSupport {
 
+	protected static final String ADMIN_USERNAME = "admin";
+	protected static final String ADMIN_PASSWORD = "test-admin";
+	// htpasswd -nbBC 4 "" test-admin
+	private static final String ADMIN_PASSWORD_HASH = "$2y$04$Gi6THaCYUt0tzbUFtadLre7kVJIFAjOQ7uZzWzUvFZoT3KwlkLrau";
+
 	private static final EmbeddedPostgres POSTGRES = start();
 
 	private static EmbeddedPostgres start() {
@@ -35,6 +40,8 @@ public abstract class PostgresTestSupport {
 		registry.add("spring.datasource.url", () -> POSTGRES.getJdbcUrl("postgres", "postgres"));
 		registry.add("spring.datasource.username", () -> "postgres");
 		registry.add("spring.datasource.password", () -> "postgres");
+		registry.add("admin.username", () -> ADMIN_USERNAME);
+		registry.add("admin.password-hash", () -> ADMIN_PASSWORD_HASH);
 	}
 
 }

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('학기 현황')}"></head>
+<body>
+<header th:replace="~{admin/fragments :: nav('dashboard')}"></header>
+<main class="page">
+	<section class="card">
+		<h2>학기</h2>
+		<p class="muted" th:if="${#lists.isEmpty(semesters)}">
+			등록된 학기가 없습니다. <a th:href="@{/admin/roster}">명부 업로드</a>에서 수강명부를 올리세요.
+		</p>
+		<div class="table-wrap" th:unless="${#lists.isEmpty(semesters)}">
+			<table>
+				<thead>
+				<tr>
+					<th>학기</th>
+					<th class="num">수업</th>
+					<th class="num">동의 대상</th>
+					<th>학기 종료일</th>
+					<th>동의서 파기 예정일</th>
+				</tr>
+				</thead>
+				<tbody>
+				<tr th:each="semester : ${semesters}">
+					<td><a th:href="@{/admin/semesters/{id}(id=${semester.id})}" th:text="${semester.label()}">2026-2학기</a></td>
+					<td class="num" th:text="${semester.courseCount}">56</td>
+					<td class="num" th:text="${semester.enrollmentCount}">1789</td>
+					<td th:text="${semester.endsOn}">2026-12-21</td>
+					<td th:text="${semester.purgeOn}">2027-12-21</td>
+				</tr>
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<section th:replace="~{admin/fragments :: uploads(${uploads})}"></section>
+</main>
+</body>
+</html>
