@@ -1,14 +1,5 @@
 # HTTPS reverse proxy for the app (Let's Encrypt certificate is issued and renewed automatically).
-#
-# Server setup (one time, or after editing this file):
-#   scp deploy/Caddyfile oracle:~/caddy/Caddyfile
-#   docker network inspect web >/dev/null 2>&1 || docker network create web
-#   docker run -d --name caddy --restart unless-stopped --network web \
-#     -p 80:80 -p 443:443 \
-#     -v ~/caddy/Caddyfile:/etc/caddy/Caddyfile:ro \
-#     -v caddy_data:/data -v caddy_config:/config \
-#     caddy:2
-# Reload after editing: docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+# Server setup and commands: deploy/README.md
 
 sejong-cedpt-cctv.duckdns.org {
 	encode zstd gzip
