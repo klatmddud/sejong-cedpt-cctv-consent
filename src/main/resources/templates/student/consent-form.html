@@ -3,50 +3,81 @@
 <head th:replace="~{student/fragments :: head('sign.title')}"></head>
 <body>
 <header th:replace="~{student/fragments :: nav(${student})}"></header>
-<main class="page narrow">
-	<section class="card">
-		<p class="breadcrumb"><a th:href="@{/consents}" th:text="#{courses.title}">내 수업</a> /</p>
-		<h1 th:text="#{sign.title}">동의서 작성</h1>
+<main class="page">
+	<a class="back-link" th:href="@{/consents}">
+		<svg class="icon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+		<span th:text="#{courses.title}">내 수업</span>
+	</a>
+	<h1 class="visually-hidden" th:text="#{sign.title}">동의서 작성</h1>
 
-		<article th:replace="~{student/fragments :: document}"></article>
+	<ol class="steps" th:attr="aria-label=#{steps.label}">
+		<li id="step-read" aria-current="step" th:text="#{steps.read}">1 동의서 확인</li>
+		<li id="step-courses" th:text="#{steps.courses}">2 수업 선택</li>
+		<li id="step-sign" th:text="#{steps.sign}">3 서명</li>
+	</ol>
 
-		<p class="alert error" th:if="${error}" th:text="${error}">서명을 입력하세요.</p>
+	<div class="alert error" role="alert" th:if="${error}">
+		<svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+		<span th:text="${error}">서명을 입력하세요.</span>
+	</div>
 
-		<form th:action="@{/consents/sign}" method="post" class="consent-form">
-			<input type="hidden" name="signature" id="signature">
-
-			<fieldset class="course-select">
-				<legend class="field-label" th:text="#{sign.courses}">동의할 수업</legend>
-				<p class="muted small" th:text="#{sign.courses.hint}">서명 한 번으로 선택한 수업마다 동의서가 제출됩니다.</p>
-				<label class="check" th:each="course : ${courses}">
-					<input type="checkbox" name="enrollmentIds" th:value="${course.enrollmentId}" checked>
-					<span>
-						<strong th:text="${course.courseName}">공업수학1</strong>
-						<span class="muted small" th:text="|${course.semester} · ${course.room} · ${course.courseCode}|">2026-2학기 · 센B201 · 000304-001</span>
-					</span>
+	<form id="consent-form" th:action="@{/consents/sign}" method="post">
+		<input type="hidden" name="signature" id="signature">
+		<div class="page" style="padding: 0">
+			<section class="card" aria-labelledby="section-read">
+				<h2 id="section-read" th:text="#{sign.section.read}">1. 동의서 확인</h2>
+				<div th:replace="~{student/fragments :: summary}"></div>
+				<label class="agree">
+					<input type="checkbox" name="agreed" value="true" id="agreed" required>
+					<span th:text="#{sign.agree}">개인 영상정보의 수집·이용·제공에 동의합니다.</span>
 				</label>
-			</fieldset>
+			</section>
 
-			<label class="check">
-				<input type="checkbox" name="agreed" value="true" required>
-				<span th:text="#{sign.agree}">개인 영상정보의 수집·이용·제공에 동의합니다.</span>
-			</label>
-
-			<div class="signature-field">
-				<div class="signature-head">
-					<span class="field-label" id="signature-label" th:text="#{sign.signature}">서명</span>
-					<button type="button" class="link" id="signature-clear" th:text="#{sign.clear}">다시 쓰기</button>
+			<section class="card" aria-labelledby="section-courses">
+				<div class="card-head">
+					<h2 id="section-courses" th:text="#{sign.section.courses}">2. 동의할 수업</h2>
+					<label class="select-all">
+						<input type="checkbox" id="select-all" checked>
+						<span><span th:text="#{sign.selectAll}">전체 선택</span> (<span id="selected-count" th:text="${#lists.size(courses)}">3</span>)</span>
+					</label>
 				</div>
-				<canvas id="signature-pad" class="signature-pad" aria-labelledby="signature-label" role="img"></canvas>
-				<p class="field-error" id="signature-error" hidden th:text="#{sign.signature.required}">네모 칸 안에 서명하세요.</p>
-				<p class="muted small" th:text="#{sign.signer(${student.name})}">동의인: 홍길동</p>
-			</div>
+				<p class="muted small" th:text="#{sign.courses.hint}">서명 한 번으로 선택한 수업마다 동의서가 제출됩니다.</p>
+				<fieldset class="course-options">
+					<legend class="visually-hidden" th:text="#{sign.courses}">동의할 수업</legend>
+					<label class="course-option" th:each="course : ${courses}">
+						<input class="visually-hidden" type="checkbox" name="enrollmentIds" th:value="${course.enrollmentId}" checked
+							   th:attr="aria-label=#{sign.select.course(${course.courseName})}">
+						<svg class="icon check" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path class="tick" d="m9 12 2 2 4-4"/></svg>
+						<strong class="course-name" th:text="${course.courseName}">공업수학1</strong>
+						<span class="course-meta">
+							<span class="pill" th:text="${course.room}">센B201</span>
+							<span class="muted" th:text="|${course.semester} · ${course.courseCode}|">2026-2학기 · 000304-001</span>
+						</span>
+					</label>
+				</fieldset>
+			</section>
 
-			<button type="submit" class="primary" th:text="#{sign.submit}">동의서 제출</button>
-			<p class="muted small" th:text="#{sign.note}">제출한 동의서는 수정할 수 없습니다.</p>
-		</form>
-	</section>
+			<section class="card" aria-labelledby="signature-label">
+				<div class="card-head">
+					<h2 id="signature-label" th:text="#{sign.section.sign}">3. 서명</h2>
+					<button type="button" class="text-button" id="signature-clear" th:text="#{sign.clear}">다시 쓰기</button>
+				</div>
+				<canvas id="signature-pad" class="signature-pad" role="img" aria-labelledby="signature-label"></canvas>
+				<p class="field-error" id="signature-error" hidden th:text="#{sign.signature.required}">네모 칸 안에 서명하세요.</p>
+				<p class="signer" th:text="#{sign.signer(${student.name})}">동의인: 홍길동</p>
+			</section>
+		</div>
+	</form>
 </main>
+<footer class="submit-bar">
+	<div>
+		<button type="submit" form="consent-form" class="button" id="submit-button"
+				th:attr="data-template=#{sign.submitCount('{n}')}"
+				th:text="#{sign.submitCount(${#lists.size(courses)})}">3개 수업 동의서 제출</button>
+		<p class="muted small" th:text="#{sign.note}">제출한 동의서는 수정할 수 없습니다.</p>
+	</div>
+</footer>
 <script th:src="@{/js/signature-pad.js}"></script>
+<script th:src="@{/js/consent-form.js}"></script>
 </body>
 </html>

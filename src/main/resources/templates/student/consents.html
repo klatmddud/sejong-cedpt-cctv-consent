@@ -3,42 +3,62 @@
 <head th:replace="~{student/fragments :: head('courses.title')}"></head>
 <body>
 <header th:replace="~{student/fragments :: nav(${student})}"></header>
-<main class="page narrow">
-	<p class="alert ok" th:if="${submitted}" th:text="#{courses.submitted(${submitted})}">2개 수업의 동의서를 제출했습니다.</p>
+<main class="page">
+	<div class="alert ok" role="status" th:if="${submitted}">
+		<svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+		<span th:text="#{courses.submitted(${submitted})}">2개 수업의 동의서를 제출했습니다.</span>
+	</div>
 
-	<section class="card">
+	<div class="page-head">
 		<h1 th:text="#{courses.title}">내 수업</h1>
-		<p class="muted" th:text="#{courses.lead}">실습실 CCTV 촬영 동의서는 학기마다 수업별로 한 번씩 제출합니다.</p>
+		<p class="muted" style="font-size: 14px" th:text="#{courses.lead}">실습실 CCTV 촬영 동의서는 학기마다 수업별로 한 번씩 제출합니다.</p>
+	</div>
 
-		<div class="empty" th:if="${#lists.isEmpty(courses)}">
-			<p><strong th:text="#{courses.empty.title}">동의서를 제출할 수업이 없습니다.</strong></p>
-			<p class="muted" th:text="#{courses.empty.body}">학과 조교에게 문의하세요.</p>
-		</div>
+	<div class="empty" th:if="${#lists.isEmpty(courses)}">
+		<p><strong th:text="#{courses.empty.title}">동의서를 제출할 수업이 없습니다.</strong></p>
+		<p class="muted" th:text="#{courses.empty.body}">학과 조교에게 문의하세요.</p>
+	</div>
 
-		<th:block th:unless="${#lists.isEmpty(courses)}">
-			<div class="summary" th:if="${pending > 0}">
-				<p th:text="#{courses.pending(${pending})}">2개 수업의 동의서가 남았습니다.</p>
-				<a class="button" th:href="@{/consents/sign}" th:text="#{courses.sign}">동의서 작성</a>
+	<th:block th:unless="${#lists.isEmpty(courses)}"
+			  th:with="total=${#lists.size(courses)}, done=${total - pending}">
+		<section class="card">
+			<div class="progress-head">
+				<span class="muted small" style="font-weight: 600" th:text="${courses[0].semester}">2026-2학기</span>
+				<strong th:text="#{courses.progress(${total}, ${done})}">3개 수업 중 2개 제출</strong>
 			</div>
+			<div class="progress" role="progressbar" aria-valuemin="0"
+				 th:attr="aria-label=#{courses.progress.label}, aria-valuenow=${done}, aria-valuemax=${total}">
+				<span th:style="|width: ${done * 100 / total}%|"></span>
+			</div>
+			<a class="button" th:if="${pending > 0}" th:href="@{/consents/sign}">
+				<span th:text="#{courses.sign}">동의서 작성</span>
+				<span class="sub" th:text="#{courses.remaining(${pending})}">(1개 남음)</span>
+			</a>
 			<p class="alert ok" th:if="${pending == 0}" th:text="#{courses.allDone}">모든 수업의 동의서를 제출했습니다.</p>
+		</section>
 
-			<ul class="course-list">
-				<li class="course" th:each="course : ${courses}">
-					<div class="course-info">
-						<p class="course-name" th:text="${course.courseName}">공업수학1</p>
-						<p class="muted" th:text="|${course.room} · ${course.professor ?: '-'} · ${course.schedule ?: '-'}|">센B201 · 홍길동 · 월10:30-12:00</p>
+		<ul class="course-list">
+			<li class="course" th:each="course : ${courses}" th:classappend="${course.signed()} ? '' : 'pending'">
+				<div class="course-info">
+					<strong class="course-name" th:text="${course.courseName}">공업수학1</strong>
+					<div class="course-meta">
+						<span class="pill" th:text="${course.room}">센B201</span>
+						<span class="muted" th:text="|${course.semester} · ${course.courseCode}|">2026-2학기 · 000304-001</span>
 					</div>
-					<div class="course-action" th:if="${course.signed()}">
-						<span class="badge done" th:text="#{courses.done}">제출 완료</span>
-						<a th:href="@{/consents/{id}/pdf(id=${course.enrollmentId})}" target="_blank" rel="noopener" th:text="#{courses.view}">동의서 보기</a>
-					</div>
-					<div class="course-action" th:unless="${course.signed()}">
-						<span class="badge todo" th:text="#{courses.todo}">미제출</span>
-					</div>
-				</li>
-			</ul>
-		</th:block>
-	</section>
+				</div>
+				<div class="course-status">
+					<th:block th:if="${course.signed()}">
+						<span class="pill done" th:text="#{courses.done}">제출 완료</span>
+						<a th:href="@{/consents/{id}/pdf(id=${course.enrollmentId})}" target="_blank" rel="noopener">
+							<span th:text="#{courses.view}">동의서 보기</span>
+							<svg class="icon" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 13H8"/><path d="M16 17H8"/></svg>
+						</a>
+					</th:block>
+					<span class="pill todo" th:unless="${course.signed()}" th:text="#{courses.todo}">미제출</span>
+				</div>
+			</li>
+		</ul>
+	</th:block>
 </main>
 </body>
 </html>

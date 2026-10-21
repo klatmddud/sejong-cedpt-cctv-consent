@@ -145,8 +145,8 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	void englishScreenStoresKoreanPdf() throws Exception {
 		mvc.perform(get("/consents/sign").with(student(STUDENT)).cookie(new Cookie("lang", "en")))
 				.andExpect(status().isOk())
-				.andExpect(content().string(Matchers.containsString("Consent to CCTV Recording and Use")))
-				.andExpect(content().string(Matchers.containsString("Submit consent")));
+				.andExpect(content().string(Matchers.containsString("Retained for 60 days and then destroyed")))
+				.andExpect(content().string(Matchers.containsString("Submit consent for 2 course(s)")));
 
 		long enrollmentId = enrollmentId(STUDENT, "000304-001");
 		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf()).cookie(new Cookie("lang", "en"))
