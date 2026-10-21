@@ -60,37 +60,43 @@ public class ConsentService {
 		return open.stream().map(enrollment -> toView(enrollment, byEnrollment.get(enrollment.getId()))).toList();
 	}
 
-	@Transactional(readOnly = true)
-	public CourseConsent course(String studentId, long enrollmentId) {
-		Enrollment enrollment = openEnrollment(studentId, enrollmentId);
-		return toView(enrollment, consents.findByEnrollment(enrollment).orElse(null));
-	}
-
 	/**
+	 * 선택한 수업들에 같은 서명으로 동의서를 한 번에 제출한다. 하나라도 문제가 있으면 아무것도 저장하지 않는다.
+	 *
 	 * @param signerName 세종대 포털 인증으로 확인한 이름
+	 * @param shownLanguage 학생이 읽은 동의서 언어. 저장하는 PDF는 언어와 관계없이 항상 한글본이다.
+	 * @return 제출한 수업 수
 	 */
 	@Transactional
-	public void submit(String studentId, String signerName, long enrollmentId, ConsentLanguage language,
+	public int submit(String studentId, String signerName, List<Long> enrollmentIds, ConsentLanguage shownLanguage,
 			boolean agreed, String signatureDataUrl) {
-		Enrollment enrollment = openEnrollment(studentId, enrollmentId);
-		if (consents.findByEnrollment(enrollment).isPresent()) {
-			throw new ConsentException("이미 제출한 동의서입니다.");
+		List<Long> ids = enrollmentIds == null ? List.of() : enrollmentIds.stream().distinct().toList();
+		if (ids.isEmpty()) {
+			throw new ConsentException("consent.error.noCourse");
+		}
+		List<Enrollment> selected = ids.stream().map(id -> openEnrollment(studentId, id)).toList();
+		if (!consents.findByEnrollmentIn(selected).isEmpty()) {
+			throw new ConsentException("consent.error.already");
 		}
 		if (!agreed) {
-			throw new ConsentException("'동의함'에 체크하세요.");
+			throw new ConsentException("consent.error.notAgreed");
 		}
 		byte[] signature = SignatureImage.fromDataUrl(signatureDataUrl);
 
 		OffsetDateTime signedAt = OffsetDateTime.now(SEOUL);
-		byte[] pdf = renderer.render(language, signerName, signedAt.atZoneSameInstant(SEOUL), signature);
+		// 동의서 양식에는 수업 정보가 없으므로 선택한 수업 모두 같은 PDF를 갖는다
+		byte[] pdf = renderer.render(ConsentLanguage.KO, signerName, signedAt.atZoneSameInstant(SEOUL), signature);
 		try {
-			Consent consent = consents.saveAndFlush(new Consent(enrollment, language, signerName, signedAt));
-			documents.save(new ConsentDocument(consent, signature, pdf));
+			for (Enrollment enrollment : selected) {
+				Consent consent = consents.saveAndFlush(new Consent(enrollment, shownLanguage, signerName, signedAt));
+				documents.save(new ConsentDocument(consent, signature, pdf));
+			}
 		}
 		catch (DataIntegrityViolationException ex) {
 			// 같은 수업을 동시에 두 번 제출한 경우
-			throw new ConsentException("이미 제출한 동의서입니다.");
+			throw new ConsentException("consent.error.already");
 		}
+		return selected.size();
 	}
 
 	@Transactional(readOnly = true)

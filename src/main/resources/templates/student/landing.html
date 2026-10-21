@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{student/fragments :: head('landing.title')}"></head>
+<body class="center">
+<main class="card login">
+	<h1>CCTV 촬영 및 이용 동의<br><span class="muted">Consent to CCTV Recording and Use</span></h1>
+	<p class="muted">세종대학교 컴퓨터공학과 실습실 수업 수강생<br>Computer Science and Engineering lab courses, Sejong University</p>
+
+	<p class="field-label">언어를 선택하세요 · Choose your language</p>
+	<div class="language-choice">
+		<a class="button block" th:href="@{/login(lang='ko')}">한국어</a>
+		<a class="button block secondary" th:href="@{/login(lang='en')}">English</a>
+	</div>
+</main>
+</body>
+</html>

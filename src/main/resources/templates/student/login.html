@@ -1,27 +1,28 @@
 <!DOCTYPE html>
-<html lang="ko" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{student/fragments :: head('로그인')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{student/fragments :: head('login.title')}"></head>
 <body class="center">
 <main class="card login">
-	<h1>CCTV 촬영 동의서 제출</h1>
-	<p class="muted">세종대학교 컴퓨터공학과 실습실(B201·B202·B203·B206·B207) 수업 수강생</p>
+	<p class="breadcrumb"><a th:href="@{/}" th:text="#{language.prompt}">언어를 선택하세요</a></p>
+	<h1 th:text="#{login.title}">CCTV 촬영 동의서 제출</h1>
+	<p class="muted" th:text="#{app.subtitle}">세종대학교 컴퓨터공학과 실습실 수업 수강생</p>
 
 	<p class="alert error" th:if="${loginError}" th:text="${loginError}">학번 또는 세종대 포털 비밀번호가 올바르지 않습니다.</p>
-	<p class="alert ok" th:if="${param.logout}">로그아웃했습니다.</p>
+	<p class="alert ok" th:if="${param.logout}" th:text="#{login.logout}">로그아웃했습니다.</p>
 
 	<form th:action="@{/login}" method="post">
-		<label>학번
+		<label><span th:text="#{login.studentId}">학번</span>
 			<input type="text" name="username" inputmode="numeric" pattern="[0-9]{8,10}" autocomplete="username" required autofocus>
 		</label>
-		<label>세종대 포털 비밀번호
+		<label><span th:text="#{login.password}">세종대 포털 비밀번호</span>
 			<input type="password" name="password" autocomplete="current-password" required>
 		</label>
-		<button type="submit" class="primary">로그인</button>
+		<button type="submit" class="primary" th:text="#{login.submit}">로그인</button>
 	</form>
 
 	<ul class="notes muted">
-		<li>세종대 포털 계정으로 본인 확인만 하고, 비밀번호는 저장하지 않습니다.</li>
-		<li>세종대 포털은 비밀번호를 5회 틀리면 계정이 잠깁니다. 비밀번호가 확실하지 않으면 포털에서 먼저 확인하세요.</li>
+		<li th:text="#{login.note.password}">세종대 포털 계정으로 본인 확인만 하고, 비밀번호는 저장하지 않습니다.</li>
+		<li th:text="#{login.note.lock}">세종대 포털은 비밀번호를 5회 틀리면 계정이 잠깁니다.</li>
 	</ul>
 </main>
 </body>

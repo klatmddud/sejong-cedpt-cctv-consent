@@ -1,36 +1,43 @@
 <!DOCTYPE html>
-<html lang="ko" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{student/fragments :: head('내 수업')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{student/fragments :: head('courses.title')}"></head>
 <body>
 <header th:replace="~{student/fragments :: nav(${student})}"></header>
 <main class="page narrow">
-	<p class="alert ok" th:if="${submitted}" th:text="|${submitted} 동의서를 제출했습니다.|">공업수학1 동의서를 제출했습니다.</p>
+	<p class="alert ok" th:if="${submitted}" th:text="#{courses.submitted(${submitted})}">2개 수업의 동의서를 제출했습니다.</p>
 
 	<section class="card">
-		<h1>내 수업</h1>
-		<p class="muted">실습실 CCTV 촬영 동의서는 학기마다 수업별로 한 번씩 제출합니다.</p>
+		<h1 th:text="#{courses.title}">내 수업</h1>
+		<p class="muted" th:text="#{courses.lead}">실습실 CCTV 촬영 동의서는 학기마다 수업별로 한 번씩 제출합니다.</p>
 
 		<div class="empty" th:if="${#lists.isEmpty(courses)}">
-			<p><strong>동의서를 제출할 수업이 없습니다.</strong></p>
-			<p class="muted">실습실 수업을 듣는데 목록에 없다면 수강 변경이 명부에 아직 반영되지 않았을 수 있습니다. 학과 조교에게 문의하세요.</p>
+			<p><strong th:text="#{courses.empty.title}">동의서를 제출할 수업이 없습니다.</strong></p>
+			<p class="muted" th:text="#{courses.empty.body}">학과 조교에게 문의하세요.</p>
 		</div>
 
-		<ul class="course-list" th:unless="${#lists.isEmpty(courses)}">
-			<li class="course" th:each="course : ${courses}">
-				<div class="course-info">
-					<p class="course-name" th:text="${course.courseName}">공업수학1</p>
-					<p class="muted" th:text="|${course.room} · ${course.professor ?: '-'} · ${course.schedule ?: '-'}|">센B201 · 홍길동 · 월10:30-12:00</p>
-				</div>
-				<div class="course-action" th:if="${course.signed()}">
-					<span class="badge done">제출 완료</span>
-					<a th:href="@{/consents/{id}/pdf(id=${course.enrollmentId})}" target="_blank" rel="noopener">동의서 보기</a>
-				</div>
-				<div class="course-action" th:unless="${course.signed()}">
-					<span class="badge todo">미제출</span>
-					<a class="button" th:href="@{/consents/{id}(id=${course.enrollmentId})}">동의서 작성</a>
-				</div>
-			</li>
-		</ul>
+		<th:block th:unless="${#lists.isEmpty(courses)}">
+			<div class="summary" th:if="${pending > 0}">
+				<p th:text="#{courses.pending(${pending})}">2개 수업의 동의서가 남았습니다.</p>
+				<a class="button" th:href="@{/consents/sign}" th:text="#{courses.sign}">동의서 작성</a>
+			</div>
+			<p class="alert ok" th:if="${pending == 0}" th:text="#{courses.allDone}">모든 수업의 동의서를 제출했습니다.</p>
+
+			<ul class="course-list">
+				<li class="course" th:each="course : ${courses}">
+					<div class="course-info">
+						<p class="course-name" th:text="${course.courseName}">공업수학1</p>
+						<p class="muted" th:text="|${course.room} · ${course.professor ?: '-'} · ${course.schedule ?: '-'}|">센B201 · 홍길동 · 월10:30-12:00</p>
+					</div>
+					<div class="course-action" th:if="${course.signed()}">
+						<span class="badge done" th:text="#{courses.done}">제출 완료</span>
+						<a th:href="@{/consents/{id}/pdf(id=${course.enrollmentId})}" target="_blank" rel="noopener" th:text="#{courses.view}">동의서 보기</a>
+					</div>
+					<div class="course-action" th:unless="${course.signed()}">
+						<span class="badge todo" th:text="#{courses.todo}">미제출</span>
+					</div>
+				</li>
+			</ul>
+		</th:block>
 	</section>
 </main>
 </body>

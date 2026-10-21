@@ -22,17 +22,17 @@ final class SignatureImage {
 
 	static byte[] fromDataUrl(String dataUrl) {
 		if (dataUrl == null || !dataUrl.startsWith(PREFIX)) {
-			throw new ConsentException("서명을 입력하세요.");
+			throw new ConsentException("consent.error.signature");
 		}
 		byte[] png;
 		try {
 			png = Base64.getDecoder().decode(dataUrl.substring(PREFIX.length()));
 		}
 		catch (IllegalArgumentException ex) {
-			throw new ConsentException("서명 이미지를 읽을 수 없습니다. 다시 서명하세요.");
+			throw new ConsentException("consent.error.signatureInvalid");
 		}
 		if (png.length > MAX_BYTES) {
-			throw new ConsentException("서명 이미지가 너무 큽니다. 다시 서명하세요.");
+			throw new ConsentException("consent.error.signatureInvalid");
 		}
 		BufferedImage image;
 		try {
@@ -42,10 +42,10 @@ final class SignatureImage {
 			image = null;
 		}
 		if (image == null || image.getWidth() > MAX_SIDE || image.getHeight() > MAX_SIDE) {
-			throw new ConsentException("서명 이미지를 읽을 수 없습니다. 다시 서명하세요.");
+			throw new ConsentException("consent.error.signatureInvalid");
 		}
 		if (inkPixels(image) < MIN_INK_PIXELS) {
-			throw new ConsentException("서명을 입력하세요.");
+			throw new ConsentException("consent.error.signature");
 		}
 		return png;
 	}

@@ -1,49 +1,49 @@
 <!DOCTYPE html>
-<html lang="ko" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{student/fragments :: head('동의서 작성')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{student/fragments :: head('sign.title')}"></head>
 <body>
 <header th:replace="~{student/fragments :: nav(${student})}"></header>
 <main class="page narrow">
 	<section class="card">
-		<p class="breadcrumb"><a th:href="@{/consents}">내 수업</a> /</p>
-		<h1 th:text="${course.courseName}">공업수학1</h1>
-		<p class="muted" th:text="|${course.semester} · ${course.room} · ${course.courseCode}|">2026-2학기 · 센B201 · 000304-001</p>
+		<p class="breadcrumb"><a th:href="@{/consents}" th:text="#{courses.title}">내 수업</a> /</p>
+		<h1 th:text="#{sign.title}">동의서 작성</h1>
 
-		<nav class="lang-toggle" aria-label="동의서 언어">
-			<a th:href="@{/consents/{id}(id=${course.enrollmentId}, lang='ko')}"
-			   th:attr="aria-current=${lang == 'ko'} ? 'page'">한국어</a>
-			<a th:href="@{/consents/{id}(id=${course.enrollmentId}, lang='en')}"
-			   th:attr="aria-current=${lang == 'en'} ? 'page'">English</a>
-		</nav>
-
-		<article th:replace="~{student/fragments :: document(${lang})}"></article>
+		<article th:replace="~{student/fragments :: document}"></article>
 
 		<p class="alert error" th:if="${error}" th:text="${error}">서명을 입력하세요.</p>
 
-		<form th:action="@{/consents/{id}(id=${course.enrollmentId})}" method="post" class="consent-form">
-			<input type="hidden" name="lang" th:value="${lang}">
+		<form th:action="@{/consents/sign}" method="post" class="consent-form">
 			<input type="hidden" name="signature" id="signature">
+
+			<fieldset class="course-select">
+				<legend class="field-label" th:text="#{sign.courses}">동의할 수업</legend>
+				<p class="muted small" th:text="#{sign.courses.hint}">서명 한 번으로 선택한 수업마다 동의서가 제출됩니다.</p>
+				<label class="check" th:each="course : ${courses}">
+					<input type="checkbox" name="enrollmentIds" th:value="${course.enrollmentId}" checked>
+					<span>
+						<strong th:text="${course.courseName}">공업수학1</strong>
+						<span class="muted small" th:text="|${course.semester} · ${course.room} · ${course.courseCode}|">2026-2학기 · 센B201 · 000304-001</span>
+					</span>
+				</label>
+			</fieldset>
 
 			<label class="check">
 				<input type="checkbox" name="agreed" value="true" required>
-				<span th:text="${lang == 'en'} ? 'I agree to the collection, use, and provision of my video information.' : '개인 영상정보의 수집·이용·제공에 동의합니다.'">
-					개인 영상정보의 수집·이용·제공에 동의합니다.
-				</span>
+				<span th:text="#{sign.agree}">개인 영상정보의 수집·이용·제공에 동의합니다.</span>
 			</label>
 
 			<div class="signature-field">
 				<div class="signature-head">
-					<span class="field-label" id="signature-label" th:text="${lang == 'en'} ? 'Signature' : '서명'">서명</span>
-					<button type="button" class="link" id="signature-clear" th:text="${lang == 'en'} ? 'Clear' : '다시 쓰기'">다시 쓰기</button>
+					<span class="field-label" id="signature-label" th:text="#{sign.signature}">서명</span>
+					<button type="button" class="link" id="signature-clear" th:text="#{sign.clear}">다시 쓰기</button>
 				</div>
 				<canvas id="signature-pad" class="signature-pad" aria-labelledby="signature-label" role="img"></canvas>
-				<p class="field-error" id="signature-error" hidden
-				   th:text="${lang == 'en'} ? 'Please sign in the box.' : '네모 칸 안에 서명하세요.'">네모 칸 안에 서명하세요.</p>
-				<p class="muted small" th:text="${lang == 'en'} ? |Consenting party: ${student.name}| : |동의인: ${student.name}|">동의인: 홍길동</p>
+				<p class="field-error" id="signature-error" hidden th:text="#{sign.signature.required}">네모 칸 안에 서명하세요.</p>
+				<p class="muted small" th:text="#{sign.signer(${student.name})}">동의인: 홍길동</p>
 			</div>
 
-			<button type="submit" class="primary" th:text="${lang == 'en'} ? 'Submit consent' : '동의서 제출'">동의서 제출</button>
-			<p class="muted small">제출한 동의서는 수정할 수 없습니다. 서명 일자는 제출한 날짜로 기록됩니다.</p>
+			<button type="submit" class="primary" th:text="#{sign.submit}">동의서 제출</button>
+			<p class="muted small" th:text="#{sign.note}">제출한 동의서는 수정할 수 없습니다.</p>
 		</form>
 	</section>
 </main>

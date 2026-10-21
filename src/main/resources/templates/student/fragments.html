@@ -1,25 +1,26 @@
 <!DOCTYPE html>
-<html lang="ko" xmlns:th="http://www.thymeleaf.org">
-<head th:fragment="head(title)">
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(titleKey)">
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title th:text="${title} + ' · CCTV 촬영 동의'">CCTV 촬영 동의</title>
+	<title th:text="#{${titleKey}} + ' · ' + #{app.title}">CCTV 촬영 동의</title>
 	<link rel="stylesheet" th:href="@{/css/admin.css}">
 </head>
 <body>
 <header th:fragment="nav(student)" class="topbar">
-	<a class="brand" th:href="@{/consents}">CCTV 촬영 동의</a>
+	<a class="brand" th:href="@{/consents}" th:text="#{app.title}">CCTV 촬영 동의</a>
 	<nav>
 		<span class="muted" th:text="|${student.name} (${student.studentId})|">홍길동 (20011234)</span>
+		<a th:href="@{''(lang=#{language.switch.lang})}" th:text="#{language.switch}">English</a>
 		<form th:action="@{/logout}" method="post">
-			<button type="submit" class="link">로그아웃</button>
+			<button type="submit" class="link" th:text="#{nav.logout}">로그아웃</button>
 		</form>
 	</nav>
 </header>
 
 <!-- 동의서 본문: 원본 PDF(consent_ko.pdf, consent_en.pdf)와 같은 내용 -->
-<article th:fragment="document(lang)" class="consent-doc">
-	<th:block th:if="${lang == 'en'}">
+<article th:fragment="document" class="consent-doc">
+	<th:block th:if="${#locale.language == 'en'}">
 		<h2>Consent to CCTV Recording and Use</h2>
 		<p>Sejong University is committed to complying with the personal information protection provisions of the
 			Personal Information Protection Act and other relevant laws, and to doing its utmost to protect the
@@ -40,7 +41,7 @@
 		<p>You have the right to refuse consent to the provision of the above video information.
 			However, if you refuse, the information you receive from the University may be restricted.</p>
 	</th:block>
-	<th:block th:unless="${lang == 'en'}">
+	<th:block th:unless="${#locale.language == 'en'}">
 		<h2>CCTV 촬영 및 이용 동의서</h2>
 		<p>세종대학교에서는 개인정보보호법 등 관련 법령 상 개인정보보호 규정 준수 및 이용자의 개인정보보호에 최선을 다하고 있습니다.
 			개인정보보호법 제15조 1항에 따라 세종대학교를 이용함에 있어 아래와 같이 귀하의 개인정보가 수집 및 이용될 수 있음을

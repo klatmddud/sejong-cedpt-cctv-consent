@@ -26,4 +26,8 @@ public enum ConsentLanguage {
 		return "en".equalsIgnoreCase(code) ? EN : KO;
 	}
 
+	public static ConsentLanguage fromLocale(Locale locale) {
+		return fromCode(locale.getLanguage());
+	}
+
 }

@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.servlet.http.Cookie;
 import java.io.ByteArrayInputStream;
 import java.time.LocalDate;
 import java.util.List;
@@ -114,14 +115,45 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	}
 
 	@Test
-	void submitsConsentAndDownloadsPdf() throws Exception {
-		long enrollmentId = enrollmentId(STUDENT, "000304-001");
+	void submitsSeveralCoursesWithOneSignature() throws Exception {
+		long first = enrollmentId(STUDENT, "000304-001");
+		long second = enrollmentId(STUDENT, "000305-001");
 
-		mvc.perform(post("/consents/" + enrollmentId).with(student(STUDENT)).with(csrf())
-						.param("lang", "en").param("agreed", "true")
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+						.param("enrollmentIds", String.valueOf(first), String.valueOf(second))
+						.param("agreed", "true")
 						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
 				.andExpect(redirectedUrl("/consents"))
-				.andExpect(flash().attribute("submitted", "과목000304-001"));
+				.andExpect(flash().attribute("submitted", 2));
+
+		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isEqualTo(2);
+		assertThat(jdbc.queryForObject("select count(*) from consent_document", Integer.class)).isEqualTo(2);
+		mvc.perform(get("/consents").with(student(STUDENT)))
+				.andExpect(content().string(Matchers.containsString("모든 수업의 동의서를 제출했습니다.")));
+
+		// 이미 제출한 수업이 섞이면 아무것도 저장하지 않는다
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+						.param("enrollmentIds", String.valueOf(first))
+						.param("agreed", "true")
+						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
+				.andExpect(redirectedUrl("/consents/sign"))
+				.andExpect(flash().attribute("error", Matchers.containsString("이미 제출")));
+		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isEqualTo(2);
+	}
+
+	@Test
+	void englishScreenStoresKoreanPdf() throws Exception {
+		mvc.perform(get("/consents/sign").with(student(STUDENT)).cookie(new Cookie("lang", "en")))
+				.andExpect(status().isOk())
+				.andExpect(content().string(Matchers.containsString("Consent to CCTV Recording and Use")))
+				.andExpect(content().string(Matchers.containsString("Submit consent")));
+
+		long enrollmentId = enrollmentId(STUDENT, "000304-001");
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf()).cookie(new Cookie("lang", "en"))
+						.param("enrollmentIds", String.valueOf(enrollmentId))
+						.param("agreed", "true")
+						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
+				.andExpect(redirectedUrl("/consents"));
 
 		assertThat(jdbc.queryForObject("select language from consent", String.class)).isEqualTo("EN");
 		byte[] pdf = mvc.perform(get("/consents/" + enrollmentId + "/pdf").with(student(STUDENT)))
@@ -129,25 +161,34 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 				.andExpect(content().contentType("application/pdf"))
 				.andReturn().getResponse().getContentAsByteArray();
 		try (var document = Loader.loadPDF(pdf)) {
-			assertThat(new PDFTextStripper().getText(document)).contains("Consent to CCTV Recording").contains("홍길동");
+			String text = new PDFTextStripper().getText(document);
+			assertThat(text).contains("동의인").contains("홍길동").doesNotContain("Consent to CCTV Recording");
 		}
-
-		// 같은 수업은 다시 제출할 수 없다
-		mvc.perform(post("/consents/" + enrollmentId).with(student(STUDENT)).with(csrf())
-						.param("lang", "ko").param("agreed", "true")
-						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
-				.andExpect(flash().attribute("error", "이미 제출한 동의서입니다."));
-		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isEqualTo(1);
 	}
 
 	@Test
-	void requiresAgreementAndSignature() throws Exception {
+	void showsErrorsInChosenLanguage() throws Exception {
 		long enrollmentId = enrollmentId(STUDENT, "000304-001");
 
-		mvc.perform(post("/consents/" + enrollmentId).with(student(STUDENT)).with(csrf())
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf()).cookie(new Cookie("lang", "en"))
+						.param("enrollmentIds", String.valueOf(enrollmentId))
 						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
-				.andExpect(flash().attribute("error", Matchers.containsString("동의함")));
-		mvc.perform(post("/consents/" + enrollmentId).with(student(STUDENT)).with(csrf())
+				.andExpect(flash().attribute("error", "Check the box to agree."));
+	}
+
+	@Test
+	void requiresCourseAgreementAndSignature() throws Exception {
+		long enrollmentId = enrollmentId(STUDENT, "000304-001");
+
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+						.param("agreed", "true").param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
+				.andExpect(flash().attribute("error", Matchers.containsString("수업")));
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+						.param("enrollmentIds", String.valueOf(enrollmentId))
+						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
+				.andExpect(flash().attribute("error", Matchers.containsString("동의합니다")));
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+						.param("enrollmentIds", String.valueOf(enrollmentId))
 						.param("agreed", "true").param("signature", SignatureFixtures.dataUrl(SignatureFixtures.blankPng())))
 				.andExpect(flash().attribute("error", Matchers.containsString("서명")));
 
@@ -155,13 +196,25 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	}
 
 	@Test
-	void cannotOpenAnotherStudentsEnrollment() throws Exception {
-		long othersEnrollment = enrollmentId(OTHER, "000304-001");
+	void cannotSubmitAnotherStudentsEnrollment() throws Exception {
+		long mine = enrollmentId(STUDENT, "000304-001");
+		long others = enrollmentId(OTHER, "000304-001");
 
-		mvc.perform(get("/consents/" + othersEnrollment).with(student(STUDENT))).andExpect(status().isNotFound());
-		mvc.perform(post("/consents/" + othersEnrollment).with(student(STUDENT)).with(csrf())
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+						.param("enrollmentIds", String.valueOf(mine), String.valueOf(others))
 						.param("agreed", "true").param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
 				.andExpect(status().isNotFound());
+		mvc.perform(get("/consents/" + others + "/pdf").with(student(STUDENT))).andExpect(status().isNotFound());
+		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isZero();
+	}
+
+	@Test
+	void landingOffersLanguageChoice() throws Exception {
+		mvc.perform(get("/"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(Matchers.containsString("/login?lang=en")));
+		mvc.perform(get("/login").param("lang", "en"))
+				.andExpect(content().string(Matchers.containsString("Sejong portal password")));
 	}
 
 	@Test
