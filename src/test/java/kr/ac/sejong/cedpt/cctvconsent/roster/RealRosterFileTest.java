@@ -43,6 +43,8 @@ class RealRosterFileTest {
 		assertThat(targets).hasSize(56);
 		assertThat(enrollments).isEqualTo(1789);
 		assertThat(students).hasSize(1156);
+		assertThat(roster.courses()).extracting(RosterFile.Course::name)
+				.noneMatch(name -> name.endsWith("(GRADE)") || name.endsWith("(P/NP)"));
 	}
 
 }

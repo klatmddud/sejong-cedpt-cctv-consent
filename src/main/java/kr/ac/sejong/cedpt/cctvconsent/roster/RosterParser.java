@@ -35,6 +35,8 @@ public final class RosterParser {
 
 	private static final Pattern TITLE = Pattern.compile("(\\d{4})\\s*년도\\s*(\\S+?)\\s*학기\\s*출석부");
 	private static final Pattern STUDENT_ID = Pattern.compile("\\d{8,10}");
+	// 학사 시스템이 과목명 뒤에 붙이는 성적 평가 방식: 공업수학1(GRADE), 세종인을위한전공탐색(P/NP)
+	private static final Pattern GRADING_SUFFIX = Pattern.compile("\\s*\\((GRADE|P/NP|P/F)\\)\\s*$", Pattern.CASE_INSENSITIVE);
 	private static final Set<String> LABELS = Set.of(
 			"과목명", "개설학과", "학점", "강의", "실습", "담당교수", "이수구분", "강의시간", "강의실", "수강인원");
 
@@ -154,7 +156,7 @@ public final class RosterParser {
 			if (expectingName) {
 				requireCourse();
 				if (current.name == null) {
-					current.name = row.getFirst().text();
+					current.name = GRADING_SUFFIX.matcher(row.getFirst().text()).replaceFirst("");
 				}
 				expectingName = false;
 				return;

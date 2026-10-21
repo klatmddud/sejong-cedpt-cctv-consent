@@ -55,6 +55,19 @@ class RosterParserTest {
 	}
 
 	@Test
+	void removesGradingMethodFromCourseName() {
+		byte[] xlsx = RosterWorkbookFixture.workbook(TITLE, 45, List.of(
+				new FixtureCourse("000304-001", "공업수학1(GRADE)", "센B201", null, List.of("20010001")),
+				new FixtureCourse("000305-001", "세종인을위한전공탐색(P/NP)", "센B201", null, List.of("20010001")),
+				new FixtureCourse("000306-001", "캡스톤디자인(산학협력)", "센B201", null, List.of("20010001"))));
+
+		RosterFile roster = RosterParser.parse(new ByteArrayInputStream(xlsx));
+
+		assertThat(roster.courses()).extracting(RosterFile.Course::name)
+				.containsExactly("공업수학1", "세종인을위한전공탐색", "캡스톤디자인(산학협력)");
+	}
+
+	@Test
 	void readsNumericStudentIdCells() {
 		byte[] xlsx = RosterWorkbookFixture.workbook(TITLE, new RosterWorkbookFixture.Options(45, true, null),
 				List.of(FixtureCourse.of("000304-001", "센B201", "20010001", "20010002")));
