@@ -95,6 +95,55 @@ class AdminControllerTest extends PostgresTestSupport {
 	}
 
 	@Test
+	void showsSemesterCoursesAsListAndTimetable() throws Exception {
+		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, RosterTestFixtures.roster(List.of(
+				RosterTestFixtures.course("000304-001", "센B201", "20010001", "20010002"),
+				RosterTestFixtures.course("000400-001", "센B203", "20010003"))));
+		mvc.perform(multipart("/admin/roster").file(file).param("endsOn", "2026-12-21")
+				.with(user("admin").roles("ADMIN")).with(csrf()));
+		long semesterId = jdbc.queryForObject("select id from semester", Long.class);
+
+		mvc.perform(get("/admin/semesters/{id}", semesterId).with(user("admin").roles("ADMIN")))
+				.andExpect(status().isOk())
+				.andExpect(content().string(Matchers.containsString("미제출 3건")))
+				.andExpect(content().string(Matchers.containsString("class=\"course-row\"")))
+				.andExpect(content().string(Matchers.containsString("id=\"course-000304-001\"")))
+				.andExpect(content().string(Matchers.containsString("20010002")));
+
+		mvc.perform(get("/admin/semesters/{id}", semesterId).param("view", "timetable").param("room", "센B203")
+						.with(user("admin").roles("ADMIN")))
+				.andExpect(status().isOk())
+				.andExpect(content().string(Matchers.containsString("class=\"timetable-block\"")))
+				.andExpect(content().string(Matchers.containsString("data-dialog=\"course-000400-001\"")))
+				.andExpect(content().string(Matchers.not(Matchers.containsString("class=\"course-row\""))));
+	}
+
+	@Test
+	void deletesCourseOnlyWhenCodeIsTypedAgain() throws Exception {
+		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, RosterTestFixtures.roster(List.of(
+				RosterTestFixtures.course("000304-001", "센B201", "20010001"),
+				RosterTestFixtures.course("000400-001", "센B203", "20010003"))));
+		mvc.perform(multipart("/admin/roster").file(file).param("endsOn", "2026-12-21")
+				.with(user("admin").roles("ADMIN")).with(csrf()));
+		long semesterId = jdbc.queryForObject("select id from semester", Long.class);
+
+		mvc.perform(post("/admin/semesters/{id}/courses/delete", semesterId).param("code", "000304-001")
+						.param("confirmCode", "000304-002").param("consentCount", "0")
+						.param("view", "timetable").param("room", "센B201")
+						.with(user("admin").roles("ADMIN")).with(csrf()))
+				.andExpect(redirectedUrl("/admin/semesters/" + semesterId + "?view=timetable&room=%EC%84%BCB201"))
+				.andExpect(flash().attributeExists("error"));
+		assertThat(jdbc.queryForObject("select count(*) from course", Integer.class)).isEqualTo(2);
+
+		mvc.perform(post("/admin/semesters/{id}/courses/delete", semesterId).param("code", "000304-001")
+						.param("confirmCode", " 000304-001 ").param("consentCount", "0")
+						.with(user("admin").roles("ADMIN")).with(csrf()))
+				.andExpect(redirectedUrl("/admin/semesters/" + semesterId + "?view=list"))
+				.andExpect(flash().attribute("notice", Matchers.containsString("000304-001")));
+		assertThat(jdbc.queryForObject("select count(*) from course", Integer.class)).isEqualTo(1);
+	}
+
+	@Test
 	void uploadsSeveralRosterFilesTogether() throws Exception {
 		MockMultipartFile first = new MockMultipartFile("file", "소융.xlsx", null, RosterTestFixtures.roster(List.of(
 				RosterTestFixtures.course("000304-001", "센B201", "20010001"))));

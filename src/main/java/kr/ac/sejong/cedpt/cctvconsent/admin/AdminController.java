@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import kr.ac.sejong.cedpt.cctvconsent.roster.CourseDeletionService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterParseException;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService;
@@ -38,10 +39,13 @@ class AdminController {
 
 	private final RosterImportService importService;
 	private final RosterQueryService queries;
+	private final CourseDeletionService courseDeletion;
 
-	AdminController(RosterImportService importService, RosterQueryService queries) {
+	AdminController(RosterImportService importService, RosterQueryService queries,
+			CourseDeletionService courseDeletion) {
 		this.importService = importService;
 		this.queries = queries;
+		this.courseDeletion = courseDeletion;
 	}
 
 	@GetMapping("/login")
@@ -61,12 +65,47 @@ class AdminController {
 		return "admin/dashboard";
 	}
 
+	/**
+	 * @param view list(강의실별 목록) 또는 timetable(강의실 하나의 주간 시간표)
+	 * @param room 시간표로 볼 강의실
+	 */
 	@GetMapping("/semesters/{id}")
-	String semester(@PathVariable long id, Model model) {
+	String semester(@PathVariable long id, @RequestParam(defaultValue = "list") String view,
+			@RequestParam(required = false) String room, Model model) {
 		model.addAttribute("semester", queries.semester(id)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND)));
-		model.addAttribute("courses", queries.courses(id));
+		model.addAttribute("timetable", "timetable".equals(view));
+		model.addAttribute("page", SemesterPage.of(queries.courses(id), room));
 		return "admin/semester";
+	}
+
+	/**
+	 * 과목과 그 수강, 동의서를 지운다. 관리자가 학수번호를 직접 입력하고, 확인 화면에서 본 동의서 수가 지금과 같아야 지운다.
+	 *
+	 * @param view, room 지운 뒤 돌아갈 화면
+	 */
+	@PostMapping("/semesters/{id}/courses/delete")
+	String deleteCourse(@PathVariable long id, @RequestParam String code, @RequestParam String confirmCode,
+			@RequestParam int consentCount, @RequestParam(defaultValue = "list") String view,
+			@RequestParam(required = false) String room, RedirectAttributes redirect) {
+		redirect.addAttribute("id", id);
+		redirect.addAttribute("view", view);
+		if (room != null) {
+			redirect.addAttribute("room", room);
+		}
+		if (!code.equals(confirmCode.strip())) {
+			redirect.addFlashAttribute("error", "입력한 학수번호가 " + code + "와(과) 다릅니다. 과목을 지우지 않았습니다.");
+			return "redirect:/admin/semesters/{id}";
+		}
+		try {
+			CourseDeletionService.Deleted deleted = courseDeletion.delete(id, code, consentCount);
+			redirect.addFlashAttribute("notice", "%s %s 과목을 지웠습니다 (수강 %d건, 동의서 %d건)."
+					.formatted(deleted.name(), deleted.code(), deleted.enrollmentCount(), deleted.consentCount()));
+		}
+		catch (CourseDeletionService.CourseNotFoundException | CourseDeletionService.ConsentCountChangedException ex) {
+			redirect.addFlashAttribute("error", ex.getMessage());
+		}
+		return "redirect:/admin/semesters/{id}";
 	}
 
 	@GetMapping("/roster")

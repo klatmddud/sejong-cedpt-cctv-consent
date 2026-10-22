@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -27,8 +28,23 @@ public class RosterQueryService {
 
 	}
 
+	/**
+	 * @param times 시간표 보기용 칸. 강의시간 형식을 읽지 못하면 비어 있다.
+	 * @param unsubmitted 동의서를 내지 않은 수강 중 학생, 학번 순
+	 * @param enrollmentCount 수강 중이 아닌 것까지 포함한 수강 행 수(과목을 지우면 함께 지워진다)
+	 * @param consentCount 받은 동의서 수(과목을 지우면 함께 지워진다)
+	 */
 	public record CourseSummary(String code, String name, String professor, String schedule, String room,
-			long studentCount) {
+			long studentCount, List<CourseTime> times, List<StudentSummary> unsubmitted, long enrollmentCount,
+			long consentCount) {
+
+		public int unsubmittedCount() {
+			return unsubmitted.size();
+		}
+
+	}
+
+	public record StudentSummary(String studentId, String name) {
 	}
 
 	public record UploadSummary(String semester, String fileName, OffsetDateTime uploadedAt, int courseCount,
@@ -62,11 +78,24 @@ public class RosterQueryService {
 		Semester semester = semesters.findById(semesterId).orElseThrow();
 		Map<Long, Long> counts = enrollments.countActiveByCourse(semester).stream()
 				.collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+		Map<Long, List<StudentSummary>> unsubmitted = enrollments.findUnsubmitted(semesterId).stream()
+				.collect(Collectors.groupingBy(row -> ((Number) row[0]).longValue(),
+						Collectors.mapping(row -> new StudentSummary((String) row[1], (String) row[2]),
+								Collectors.toList())));
+		Map<Long, Object[]> all = enrollments.countAllByCourse(semesterId).stream()
+				.collect(Collectors.toMap(row -> ((Number) row[0]).longValue(), Function.identity()));
 		return courses.findBySemester(semester).stream()
 				.sorted(Comparator.comparing(Course::getRoom).thenComparing(Course::getCode))
 				.map(course -> new CourseSummary(course.getCode(), course.getName(), course.getProfessor(),
-						course.getSchedule(), course.getRoom(), counts.getOrDefault(course.getId(), 0L)))
+						course.getSchedule(), course.getRoom(), counts.getOrDefault(course.getId(), 0L),
+						CourseTime.parse(course.getSchedule()), unsubmitted.getOrDefault(course.getId(), List.of()),
+						count(all, course, 1), count(all, course, 2)))
 				.toList();
+	}
+
+	private static long count(Map<Long, Object[]> rows, Course course, int column) {
+		Object[] row = rows.get(course.getId());
+		return row == null ? 0 : ((Number) row[column]).longValue();
 	}
 
 	public List<UploadSummary> recentUploads() {

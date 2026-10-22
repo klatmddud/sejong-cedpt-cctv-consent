@@ -6,36 +6,171 @@
 <main class="page">
 	<section class="card">
 		<p class="breadcrumb"><a th:href="@{/admin}">학기 현황</a> /</p>
-		<h2 th:text="${semester.label()}">2026-2학기</h2>
-		<p class="muted"
-		   th:text="|수업 ${semester.courseCount}개 · 동의 대상 ${semester.enrollmentCount}건 · 파기 예정일 ${semester.purgeOn}|">
-			수업 56개 · 동의 대상 1789건 · 파기 예정일 2027-12-21
-		</p>
-		<div class="table-wrap">
-			<table>
-				<thead>
-				<tr>
-					<th>강의실</th>
-					<th>학수번호</th>
-					<th>과목명</th>
-					<th>담당교수</th>
-					<th>강의시간</th>
-					<th class="num">학생</th>
-				</tr>
-				</thead>
-				<tbody>
-				<tr th:each="course : ${courses}">
-					<td th:text="${course.room}">센B201</td>
-					<td th:text="${course.code}">000304-001</td>
-					<td th:text="${course.name}">공업수학1</td>
-					<td th:text="${course.professor}">홍길동</td>
-					<td th:text="${course.schedule}">월10:30-12:00</td>
-					<td class="num" th:text="${course.studentCount}">19</td>
-				</tr>
-				</tbody>
-			</table>
+		<p class="alert ok" th:if="${notice}" th:text="${notice}">공업수학1 000304-001 과목을 지웠습니다.</p>
+		<p class="alert error" th:if="${error}" th:text="${error}">입력한 학수번호가 다릅니다.</p>
+		<div class="semester-head">
+			<div>
+				<h2 th:text="|${semester.label()} 동의서 현황|">2026-2학기 동의서 현황</h2>
+				<p class="muted"
+				   th:text="|수업 ${semester.courseCount}개 · 동의 대상 ${semester.enrollmentCount}건 · 미제출 ${page.unsubmittedCount}건 · 파기 예정일 ${semester.purgeOn}|">
+					수업 56개 · 동의 대상 1789건 · 미제출 412건 · 파기 예정일 2027-12-21
+				</p>
+			</div>
+			<nav class="segmented" aria-label="보기 방식">
+				<a th:href="@{/admin/semesters/{id}(id=${semester.id})}"
+				   th:classappend="${!timetable} ? 'is-on'" th:attr="aria-current=${!timetable} ? 'page'">목록</a>
+				<a th:href="@{/admin/semesters/{id}(id=${semester.id}, view='timetable', room=${page.room})}"
+				   th:classappend="${timetable} ? 'is-on'" th:attr="aria-current=${timetable} ? 'page'">시간표</a>
+			</nav>
+		</div>
+
+		<p class="muted" th:if="${#lists.isEmpty(page.groups)}">이 학기에 동의 대상 수업이 없습니다.</p>
+
+		<div class="room-groups" th:unless="${timetable}">
+			<div class="room-group" th:each="group : ${page.groups}">
+				<div class="room-group-head">
+					<h3 th:text="${group.room}">센B201</h3>
+					<span class="muted"
+						  th:text="|수업 ${#lists.size(group.courses)}개 · 학생 ${group.studentCount}명 · 미제출 ${group.unsubmittedCount}명|">
+						수업 10개 · 학생 291명 · 미제출 64명
+					</span>
+				</div>
+				<div class="course-table">
+					<div class="course-cols course-table-head">
+						<span>강의실</span>
+						<span>학수번호</span>
+						<span>과목명</span>
+						<span>담당교수</span>
+						<span>강의시간</span>
+						<span class="num">학생</span>
+						<span class="num">미제출 학생</span>
+					</div>
+					<button type="button" class="course-row" th:each="course : ${group.courses}"
+							th:attr="data-dialog=|course-${course.code}|">
+						<span class="course-cols">
+							<span th:text="${course.room}">센B201</span>
+							<span class="tabular" th:text="${course.code}">000304-001</span>
+							<span class="course-name" th:text="${course.name}">공업수학1</span>
+							<span th:text="${course.professor}">홍길동</span>
+							<span class="tabular" th:text="${course.schedule}">월10:30-12:00</span>
+							<span class="num" th:text="${course.studentCount}">19</span>
+							<span class="num" th:classappend="${course.unsubmittedCount() > 0} ? 'unsubmitted' : 'muted'"
+								  th:text="${course.unsubmittedCount()}">7</span>
+						</span>
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="timetable-view" th:if="${timetable and page.room != null}">
+			<nav class="room-tabs" aria-label="강의실">
+				<a th:each="group : ${page.groups}"
+				   th:href="@{/admin/semesters/{id}(id=${semester.id}, view='timetable', room=${group.room})}"
+				   th:classappend="${group.room == page.room} ? 'is-on'"
+				   th:attr="aria-current=${group.room == page.room} ? 'page'"
+				   th:text="|${group.room} · ${#lists.size(group.courses)}|">센B201 · 10</a>
+			</nav>
+			<div class="timetable-wrap">
+				<div class="timetable" th:style="|grid-template-columns: 60px repeat(${#lists.size(page.days)}, minmax(0, 1fr))|">
+					<div class="timetable-head"></div>
+					<div class="timetable-head" th:each="day : ${page.days}" th:text="${day.name}">월</div>
+					<div class="timetable-hours">
+						<div th:each="hour : ${page.hours}" th:text="${hour}">09:00</div>
+					</div>
+					<div class="timetable-day" th:each="day : ${page.days}" th:style="|height: ${page.timetableHeight}px|">
+						<button type="button" class="timetable-block" th:each="block : ${day.blocks}"
+								th:style="|top: ${block.top}px; height: ${block.height}px; left: calc(${block.left}% + 4px); width: calc(${block.width}% - 8px)|"
+								th:attr="data-dialog=|course-${block.course.code}|,aria-label=|${block.course.name} ${block.course.professor} ${block.course.schedule}|">
+							<span class="timetable-block-name" th:text="${block.course.name}">C프로그래밍및실습</span>
+							<span class="timetable-block-professor" th:text="${block.course.professor}">홍길동</span>
+						</button>
+					</div>
+				</div>
+			</div>
+			<div th:unless="${#lists.isEmpty(page.unscheduled)}">
+				<p class="muted">강의시간을 읽지 못해 시간표에 넣지 못한 수업</p>
+				<ul class="unscheduled">
+					<li th:each="course : ${page.unscheduled}">
+						<button type="button" class="link" th:attr="data-dialog=|course-${course.code}|"
+								th:text="|${course.name} (${course.code}) ${course.schedule ?: ''}|">과목</button>
+					</li>
+				</ul>
+			</div>
+			<p class="muted small">칸을 누르면 수업 상세와 미제출 학생 명단을 볼 수 있습니다.</p>
 		</div>
 	</section>
 </main>
+
+<th:block th:each="group : ${page.groups}">
+	<dialog class="course-detail" th:each="course : ${group.courses}" th:id="|course-${course.code}|"
+			th:attr="aria-label=|${course.name} 상세|">
+		<div class="course-detail-body">
+			<div class="course-detail-head">
+				<div>
+					<span class="muted small" th:text="|${course.room} · ${course.code}|">센B201 · 000304-001</span>
+					<h3 th:text="${course.name}">공업수학1</h3>
+				</div>
+				<form method="dialog">
+					<button type="submit" class="icon-button" aria-label="닫기">
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+							 stroke-linecap="round" aria-hidden="true">
+							<path d="M6 6l12 12M18 6L6 18"></path>
+						</svg>
+					</button>
+				</form>
+			</div>
+			<dl class="course-detail-fields">
+				<dt>강의실</dt>
+				<dd th:text="${course.room}">센B201</dd>
+				<dt>학수번호</dt>
+				<dd class="tabular" th:text="${course.code}">000304-001</dd>
+				<dt>과목명</dt>
+				<dd th:text="${course.name}">공업수학1</dd>
+				<dt>담당교수</dt>
+				<dd th:text="${course.professor}">홍길동</dd>
+				<dt>강의시간</dt>
+				<dd class="tabular" th:text="${course.schedule}">월10:30-12:00</dd>
+				<dt>학생</dt>
+				<dd th:text="|${course.studentCount}명|">19명</dd>
+				<dt>미제출 학생</dt>
+				<dd><span th:classappend="${course.unsubmittedCount() > 0} ? 'unsubmitted' : 'muted'"
+						  th:text="|${course.unsubmittedCount()}명|">7명</span></dd>
+			</dl>
+			<h4>미제출 학생 명단</h4>
+			<p class="alert ok" th:if="${#lists.isEmpty(course.unsubmitted)}">모든 학생이 동의서를 제출했습니다.</p>
+			<div class="student-list" th:unless="${#lists.isEmpty(course.unsubmitted)}">
+				<div class="student-cols student-list-head">
+					<span>#</span>
+					<span>학번</span>
+					<span>이름</span>
+				</div>
+				<div class="student-cols" th:each="student, stat : ${course.unsubmitted}">
+					<span class="muted tabular" th:text="${stat.count}">1</span>
+					<span class="tabular" th:text="${student.studentId}">20010001</span>
+					<span th:text="${student.name}">홍길동</span>
+				</div>
+			</div>
+
+			<details class="danger-zone">
+				<summary>과목 삭제</summary>
+				<p th:text="|이 과목과 수강 ${course.enrollmentCount}건, 받은 동의서 ${course.consentCount}건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.|">
+					이 과목과 수강 19건, 받은 동의서 12건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.
+				</p>
+				<p class="muted small">폐강 등으로 명부에서 빠진 과목을 정리할 때 쓰세요. 이 과목이 든 명부를 다시 올리거나, 학생 시간표(SJPT)에 이 과목이 남아 있으면 다시 생깁니다.</p>
+				<form method="post" th:action="@{/admin/semesters/{id}/courses/delete(id=${semester.id})}">
+					<input type="hidden" name="code" th:value="${course.code}">
+					<input type="hidden" name="consentCount" th:value="${course.consentCount}">
+					<input type="hidden" name="view" th:value="${timetable} ? 'timetable' : 'list'">
+					<input type="hidden" name="room" th:value="${page.room}">
+					<label><span>확인을 위해 학수번호 <strong th:text="${course.code}">000304-001</strong>을(를) 입력하세요</span>
+						<input type="text" name="confirmCode" autocomplete="off" required>
+					</label>
+					<button type="submit" class="danger">과목 삭제</button>
+				</form>
+			</details>
+		</div>
+	</dialog>
+</th:block>
+<script th:src="@{/js/admin-semester.js}"></script>
 </body>
 </html>

@@ -35,6 +35,13 @@ interface CourseRepository extends JpaRepository<Course, Long> {
 
 	List<Course> findBySemester(Semester semester);
 
+	Optional<Course> findBySemesterAndCode(Semester semester, String code);
+
+	/** 수강, 동의서는 DB의 ON DELETE CASCADE로 지운다. 이미 읽은 수강 엔티티가 남지 않도록 영속성 컨텍스트를 비운다. */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("delete from Course c where c.id = :id")
+	void deleteWithEnrollments(long id);
+
 }
 
 interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
@@ -48,6 +55,19 @@ interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select e from Enrollment e where e.id in :ids")
 	List<Enrollment> lockByIds(Collection<Long> ids);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select e from Enrollment e where e.course = :course")
+	List<Enrollment> lockByCourse(Course course);
+
+	/** [course id, 수강 행 수(수강 중이 아닌 것 포함), 동의서 수]. 과목을 지울 때 함께 지워지는 양이다. */
+	@Query(value = """
+			select e.course_id, count(*), count(s.id) from enrollment e
+			join course c on c.id = e.course_id
+			left join consent s on s.enrollment_id = e.id
+			where c.semester_id = :semesterId
+			group by e.course_id""", nativeQuery = true)
+	List<Object[]> countAllByCourse(long semesterId);
 
 	/** 주어진 수강 중 동의서가 있는 것의 id. consent 패키지에 의존하지 않도록 테이블을 직접 읽는다. */
 	@Query(value = "select enrollment_id from consent where enrollment_id in (:enrollmentIds)", nativeQuery = true)
@@ -64,6 +84,15 @@ interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 			where e.course.semester = :semester and (e.inLatestRoster = true or e.inSjpt = true)
 			group by e.course.id""")
 	List<Object[]> countActiveByCourse(Semester semester);
+
+	/** 동의서를 내지 않은 수강 중 학생 [course id, 학번, 이름], 학번 순. consent 테이블은 findSignedIds처럼 직접 읽는다. */
+	@Query(value = """
+			select e.course_id, e.student_id, e.student_name from enrollment e
+			join course c on c.id = e.course_id
+			where c.semester_id = :semesterId and (e.in_latest_roster or e.in_sjpt)
+			and not exists (select 1 from consent s where s.enrollment_id = e.id)
+			order by e.student_id""", nativeQuery = true)
+	List<Object[]> findUnsubmitted(long semesterId);
 
 }
 
