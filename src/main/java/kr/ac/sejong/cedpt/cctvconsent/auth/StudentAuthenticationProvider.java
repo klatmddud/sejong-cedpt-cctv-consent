@@ -3,6 +3,9 @@ package kr.ac.sejong.cedpt.cctvconsent.auth;
 import java.time.Duration;
 import java.util.List;
 import java.util.regex.Pattern;
+import kr.ac.sejong.cedpt.cctvconsent.roster.EnrollmentSync;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Component;
  * 세종대 포털은 5회 실패하면 비밀번호를 초기화해야 하므로, 우리 서버를 통한 실패는 학번당 30분에 3회로 막는다.
  * 같은 IP에서 여러 학번을 시도하는 것도 30분에 10회로 막는다.
  * 예외 메시지는 messages.properties의 코드이며 로그인 화면이 학생이 고른 언어로 바꿔 보여 준다.
+ * 로그인에 성공하면 sjpt에서 받은 수강 과목을 반영한다. 반영에 실패해도 로그인은 성공시키고 이전 수강 정보로 보여 준다.
  */
 @Component
 public class StudentAuthenticationProvider implements AuthenticationProvider {
@@ -27,12 +31,17 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 	static final LoginAttemptLimiter.Policy PER_IP = new LoginAttemptLimiter.Policy(10, Duration.ofMinutes(30));
 	private static final Pattern STUDENT_ID = Pattern.compile("\\d{8,10}");
 
+	private static final Logger log = LoggerFactory.getLogger(StudentAuthenticationProvider.class);
+
 	private final StudentAuthenticator authenticator;
 	private final LoginAttemptLimiter limiter;
+	private final EnrollmentSync enrollmentSync;
 
-	public StudentAuthenticationProvider(StudentAuthenticator authenticator, LoginAttemptLimiter limiter) {
+	public StudentAuthenticationProvider(StudentAuthenticator authenticator, LoginAttemptLimiter limiter,
+			EnrollmentSync enrollmentSync) {
 		this.authenticator = authenticator;
 		this.limiter = limiter;
+		this.enrollmentSync = enrollmentSync;
 	}
 
 	@Override
@@ -49,12 +58,10 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 			throw new LockedException("login.error.locked");
 		}
 
+		StudentLogin login;
 		try {
-			SejongStudent student = authenticator.authenticate(studentId, password);
+			login = authenticator.authenticate(studentId, password);
 			limiter.reset(studentKey);
-			return UsernamePasswordAuthenticationToken.authenticated(
-					new StudentPrincipal(student.studentId(), student.name()), null,
-					List.of(new SimpleGrantedAuthority("ROLE_STUDENT")));
 		}
 		catch (SejongAuthException ex) {
 			switch (ex.getReason()) {
@@ -66,6 +73,33 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 				case ACCOUNT_RESTRICTED -> throw new LockedException("login.error.restricted");
 				default -> throw new AuthenticationServiceException("login.error.unavailable", ex);
 			}
+		}
+
+		SejongStudent student = login.student();
+		return UsernamePasswordAuthenticationToken.authenticated(
+				new StudentPrincipal(student.studentId(), student.name(), syncCourses(login)), null,
+				List.of(new SimpleGrantedAuthority("ROLE_STUDENT")));
+	}
+
+	/** @return 수강 과목을 받아 반영했는지 */
+	private boolean syncCourses(StudentLogin login) {
+		if (!login.coursesLoaded()) {
+			return false;
+		}
+		List<EnrollmentSync.EnrolledCourse> courses = login.courses().stream()
+				.map(course -> new EnrollmentSync.EnrolledCourse(course.code(), course.name(), course.professors(),
+						course.times(), course.rooms()))
+				.toList();
+		try {
+			enrollmentSync.sync(login.student().studentId(), login.student().name(), login.term().year(),
+					String.valueOf(login.term().term()), courses);
+			return true;
+		}
+		catch (RuntimeException ex) {
+			// DB 제약 오류 메시지에는 학번이 들어갈 수 있어 예외 종류만 남긴다
+			log.warn("수강 과목 반영 실패: {}", ex.getClass().getName());
+			log.debug("수강 과목 반영 실패", ex);
+			return false;
 		}
 	}
 

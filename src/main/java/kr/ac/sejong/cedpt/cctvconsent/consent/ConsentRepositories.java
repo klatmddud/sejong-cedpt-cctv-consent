@@ -20,18 +20,18 @@ interface ConsentRepository extends JpaRepository<Consent, Long> {
 interface ConsentDocumentRepository extends JpaRepository<ConsentDocument, Long> {
 }
 
-/** 학생 본인이 동의할 수 있는 수강: 최신 명부에 있고 학기가 끝나지 않은 것. */
+/** 학생 본인이 동의할 수 있는 수강: 최신 명부 또는 sjpt에서 확인됐고 학기가 끝나지 않은 것. */
 interface StudentEnrollmentRepository extends Repository<Enrollment, Long> {
 
 	@Query("""
 			select e from Enrollment e join fetch e.course c join fetch c.semester s
-			where e.studentId = :studentId and e.inLatestRoster = true and s.endsOn >= :today
+			where e.studentId = :studentId and (e.inLatestRoster = true or e.inSjpt = true) and s.endsOn >= :today
 			order by s.year desc, s.term desc, c.name""")
 	List<Enrollment> findOpen(String studentId, LocalDate today);
 
 	@Query("""
 			select e from Enrollment e join fetch e.course c join fetch c.semester s
-			where e.id = :id and e.studentId = :studentId and e.inLatestRoster = true and s.endsOn >= :today""")
+			where e.id = :id and e.studentId = :studentId and (e.inLatestRoster = true or e.inSjpt = true) and s.endsOn >= :today""")
 	Optional<Enrollment> findOpenById(long id, String studentId, LocalDate today);
 
 }

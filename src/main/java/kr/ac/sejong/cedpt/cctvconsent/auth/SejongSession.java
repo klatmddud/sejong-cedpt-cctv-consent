@@ -12,24 +12,18 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.springframework.stereotype.Component;
 
 /**
- * 세종대 포털 SSO로 학번/비밀번호를 확인하고 학생 정보를 조회한다.
+ * 세종대 서버들(portal, sjpt)에 대한 HTTP 세션 하나. 쿠키 저장소를 세션마다 새로 만들어 학생 간 세션이 섞이지 않게 한다.
  *
- * 흐름: 포털 로그인 → classic.sejong.ac.kr SSO → 고전독서 인증현황 페이지의 사용자 정보 파싱.
  * 비밀번호는 세종대 서버로 전달만 하고 저장하거나 로그에 남기지 않는다.
  * 로그인 실패 시 재시도하지 않는다 (포털은 5회 이상 실패하면 비밀번호 초기화를 요구함).
  * 요청, 리다이렉트, 쿠키는 https://*.sejong.ac.kr 로만 제한한다.
  */
-@Component
-public class SejongPortalClient implements StudentAuthenticator {
+final class SejongSession implements AutoCloseable {
 
 	private static final URI PORTAL_URI = URI.create("https://portal.sejong.ac.kr");
 	private static final URI LOGIN_URI = URI.create("https://portal.sejong.ac.kr/jsp/login/login_action.jsp");
-	private static final URI SSO_URI = URI.create(
-			"https://classic.sejong.ac.kr/_custom/sejong/sso/sso-return.jsp?returnUrl=https://classic.sejong.ac.kr/classic/index.do");
-	private static final URI STUDENT_INFO_URI = URI.create("https://classic.sejong.ac.kr/classic/reading/status.do");
 	private static final Duration TIMEOUT = Duration.ofSeconds(10);
 	private static final int MAX_REDIRECTS = 5;
 
@@ -45,44 +39,30 @@ public class SejongPortalClient implements StudentAuthenticator {
 		SejongTls.allowLegacyRsaCipher();
 	}
 
-	@Override
-	public SejongStudent authenticate(String studentId, String password) {
-		if (isBlank(studentId) || isBlank(password)) {
-			throw new SejongAuthException(SejongAuthException.Reason.INVALID_CREDENTIALS, "학번과 비밀번호를 입력하세요.");
-		}
-		String id = studentId.trim();
+	private final HttpClient client;
 
-		try (HttpClient client = newClient()) {
-			login(client, id, password);
-			send(client, get(SSO_URI));
+	SejongSession() {
+		CookieManager cookies = new CookieManager(null, (uri, cookie) -> isSejongHttps(uri));
+		HttpCookie chknos = new HttpCookie("chknos", "false");
+		chknos.setPath("/");
+		chknos.setVersion(0);
+		cookies.getCookieStore().add(PORTAL_URI, chknos);
 
-			HttpResponse<String> page = send(client, get(STUDENT_INFO_URI));
-			URI finalUri = page.uri();
-			if (!STUDENT_INFO_URI.getHost().equals(finalUri.getHost())
-					|| !STUDENT_INFO_URI.getPath().equals(finalUri.getPath())) {
-				throw new SejongAuthException(SejongAuthException.Reason.UNEXPECTED_RESPONSE,
-						"classic.sejong.ac.kr SSO 세션이 만들어지지 않았습니다: " + finalUri.getHost() + finalUri.getPath());
-			}
-
-			SejongStudent student = SejongStudentParser.parse(page.body());
-			if (!student.studentId().equals(id)) {
-				throw new SejongAuthException(SejongAuthException.Reason.UNEXPECTED_RESPONSE,
-						"조회된 학번이 입력한 학번과 다릅니다.");
-			}
-			return student;
-		}
-		catch (IOException ex) {
-			throw new SejongAuthException(SejongAuthException.Reason.UNAVAILABLE, "세종대 서버에 연결할 수 없습니다.", ex);
-		}
-		catch (InterruptedException ex) {
-			Thread.currentThread().interrupt();
-			throw new SejongAuthException(SejongAuthException.Reason.UNAVAILABLE, "세종대 인증이 중단되었습니다.", ex);
-		}
+		this.client = HttpClient.newBuilder()
+				.cookieHandler(cookies)
+				.followRedirects(HttpClient.Redirect.NEVER)
+				.connectTimeout(TIMEOUT)
+				.build();
 	}
 
-	private void login(HttpClient client, String studentId, String password) throws IOException, InterruptedException {
+	/**
+	 * 포털에 로그인한다. 성공하면 *.sejong.ac.kr 공통 SSO 쿠키가 이 세션에 남는다.
+	 *
+	 * @param returnHost 로그인 뒤 돌아갈 서비스 호스트 (포털 rtUrl)
+	 */
+	void login(String studentId, String password, String returnHost) throws IOException, InterruptedException {
 		String form = "mainLogin=N"
-				+ "&rtUrl=" + encode("classic.sejong.ac.kr")
+				+ "&rtUrl=" + encode(returnHost)
 				+ "&id=" + encode(studentId)
 				+ "&password=" + encode(password);
 		HttpRequest request = HttpRequest.newBuilder(LOGIN_URI)
@@ -93,7 +73,23 @@ public class SejongPortalClient implements StudentAuthenticator {
 				.POST(HttpRequest.BodyPublishers.ofString(form))
 				.build();
 
-		checkLoginResult(send(client, request).body());
+		checkLoginResult(send(request).body());
+	}
+
+	HttpResponse<String> get(URI uri) throws IOException, InterruptedException {
+		return send(getRequest(uri));
+	}
+
+	HttpResponse<String> postJson(URI uri, String json) throws IOException, InterruptedException {
+		HttpRequest request = HttpRequest.newBuilder(uri)
+				.timeout(TIMEOUT)
+				.header("User-Agent", USER_AGENT)
+				.header("Accept", "application/json")
+				.header("Content-Type", "application/json; charset=UTF-8")
+				.header("Referer", uri.getScheme() + "://" + uri.getHost() + "/")
+				.POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+				.build();
+		return send(request);
 	}
 
 	/**
@@ -124,7 +120,7 @@ public class SejongPortalClient implements StudentAuthenticator {
 	 * 리다이렉트를 직접 따라간다. 301/302/303만 GET으로 따라가고(요청 본문을 다시 보내지 않음),
 	 * 대상은 https://*.sejong.ac.kr 이어야 한다.
 	 */
-	private HttpResponse<String> send(HttpClient client, HttpRequest request) throws IOException, InterruptedException {
+	private HttpResponse<String> send(HttpRequest request) throws IOException, InterruptedException {
 		HttpRequest current = request;
 		for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
 			HttpResponse<String> response = client.send(current, HttpResponse.BodyHandlers.ofString());
@@ -136,7 +132,7 @@ public class SejongPortalClient implements StudentAuthenticator {
 				throw new SejongAuthException(SejongAuthException.Reason.UNAVAILABLE,
 						current.uri().getHost() + current.uri().getPath() + " 응답 오류: HTTP " + status);
 			}
-			current = get(redirectTarget(current.uri(), response));
+			current = getRequest(redirectTarget(current.uri(), response));
 		}
 		throw new SejongAuthException(SejongAuthException.Reason.UNEXPECTED_RESPONSE, "리다이렉트가 너무 많습니다.");
 	}
@@ -166,24 +162,7 @@ public class SejongPortalClient implements StudentAuthenticator {
 				&& (host.equalsIgnoreCase("sejong.ac.kr") || host.toLowerCase().endsWith(".sejong.ac.kr"));
 	}
 
-	/**
-	 * 요청마다 새 쿠키 저장소를 써서 학생 간 세션이 섞이지 않게 한다.
-	 */
-	private static HttpClient newClient() {
-		CookieManager cookies = new CookieManager(null, (uri, cookie) -> isSejongHttps(uri));
-		HttpCookie chknos = new HttpCookie("chknos", "false");
-		chknos.setPath("/");
-		chknos.setVersion(0);
-		cookies.getCookieStore().add(PORTAL_URI, chknos);
-
-		return HttpClient.newBuilder()
-				.cookieHandler(cookies)
-				.followRedirects(HttpClient.Redirect.NEVER)
-				.connectTimeout(TIMEOUT)
-				.build();
-	}
-
-	private static HttpRequest get(URI uri) {
+	private static HttpRequest getRequest(URI uri) {
 		return HttpRequest.newBuilder(uri).timeout(TIMEOUT).header("User-Agent", USER_AGENT).GET().build();
 	}
 
@@ -191,8 +170,9 @@ public class SejongPortalClient implements StudentAuthenticator {
 		return URLEncoder.encode(value, StandardCharsets.UTF_8);
 	}
 
-	private static boolean isBlank(String value) {
-		return value == null || value.isBlank();
+	@Override
+	public void close() {
+		client.close();
 	}
 
 }

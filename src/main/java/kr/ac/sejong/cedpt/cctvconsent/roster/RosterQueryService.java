@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 관리자 화면용 조회. 학생 수는 가장 최근 명부에 있는 학생(inLatestRoster)만 센다.
+ * 관리자 화면용 조회. 학생 수는 수강 중인 학생(최근 명부 또는 sjpt에서 확인됨)만 센다.
  */
 @Service
 @Transactional(readOnly = true)
@@ -32,7 +32,7 @@ public class RosterQueryService {
 	}
 
 	public record UploadSummary(String semester, String fileName, OffsetDateTime uploadedAt, int courseCount,
-			int enrollmentCount, int addedCount, int removedCount) {
+			int enrollmentCount, int addedCount, int removedCount, int deletedCount, int deletedConsentCount) {
 	}
 
 	private final SemesterRepository semesters;
@@ -74,7 +74,8 @@ public class RosterQueryService {
 				.map(upload -> new UploadSummary(
 						upload.getSemester().getYear() + "-" + upload.getSemester().getTerm() + "학기",
 						upload.getFileName(), upload.getUploadedAt(), upload.getCourseCount(),
-						upload.getEnrollmentCount(), upload.getAddedCount(), upload.getRemovedCount()))
+						upload.getEnrollmentCount(), upload.getAddedCount(), upload.getRemovedCount(),
+						upload.getDeletedCount(), upload.getDeletedConsentCount()))
 				.toList();
 	}
 

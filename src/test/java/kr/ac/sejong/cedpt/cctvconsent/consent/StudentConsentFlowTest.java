@@ -25,7 +25,10 @@ import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.PostgresTestSupport;
 import kr.ac.sejong.cedpt.cctvconsent.auth.SejongAuthException;
 import kr.ac.sejong.cedpt.cctvconsent.auth.SejongStudent;
+import kr.ac.sejong.cedpt.cctvconsent.auth.SjptCourse;
 import kr.ac.sejong.cedpt.cctvconsent.auth.StudentAuthenticator;
+import kr.ac.sejong.cedpt.cctvconsent.auth.StudentLogin;
+import kr.ac.sejong.cedpt.cctvconsent.auth.AcademicTerm;
 import kr.ac.sejong.cedpt.cctvconsent.auth.StudentPrincipal;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterTestFixtures;
@@ -42,7 +45,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -50,6 +55,8 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 
 	private static final String STUDENT = "20010001";
 	private static final String OTHER = "20010002";
+	// RosterTestFixtures 명부와 같은 학기
+	private static final AcademicTerm TERM = new AcademicTerm(2026, 2);
 
 	@Autowired
 	MockMvc mvc;
@@ -70,17 +77,48 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 				RosterTestFixtures.course("000304-001", "센B201", STUDENT, OTHER),
 				RosterTestFixtures.course("000305-001", "센B206", STUDENT),
 				RosterTestFixtures.course("000306-001", "센B209", STUDENT)));
-		rosterImport.importRoster("명부.xlsx", new ByteArrayInputStream(roster), LocalDate.now().plusMonths(3));
+		rosterImport.importRoster("명부.xlsx", new ByteArrayInputStream(roster), LocalDate.now().plusMonths(3), List.of());
 	}
 
 	@Test
 	void logsInWithPortalAccount() throws Exception {
 		when(authenticator.authenticate(STUDENT, "pw"))
-				.thenReturn(new SejongStudent(STUDENT, "홍길동", "컴퓨터공학과", "2", "재학"));
+				.thenReturn(new StudentLogin(new SejongStudent(STUDENT, "홍길동"), TERM, List.of()));
 
 		mvc.perform(formLogin("/login").user(STUDENT).password("pw"))
 				.andExpect(authenticated().withRoles("STUDENT"))
 				.andExpect(redirectedUrl("/consents"));
+	}
+
+	@Test
+	void loginAddsSjptCoursesInTargetRooms() throws Exception {
+		when(authenticator.authenticate(STUDENT, "pw")).thenReturn(new StudentLogin(new SejongStudent(STUDENT, "홍길동"),
+				TERM, List.of(
+						sjptCourse("000304-001", "과목000304-001", "월10:30-12:00(김교수/센B201)"),
+						sjptCourse("000400-001", "정정기간추가과목", "화10:30-12:00(김교수/센B203)"),
+						sjptCourse("000401-001", "대상아닌강의실과목", "수10:30-12:00(김교수/센B209)"))));
+
+		MockHttpSession session = login(STUDENT);
+
+		mvc.perform(get("/consents").session(session))
+				.andExpect(status().isOk())
+				.andExpect(content().string(Matchers.containsString("정정기간추가과목")))
+				.andExpect(content().string(Matchers.containsString("과목000305-001")))
+				.andExpect(content().string(Matchers.not(Matchers.containsString("대상아닌강의실과목"))))
+				.andExpect(content().string(Matchers.not(Matchers.containsString("수강 정보를 새로 불러오지 못해"))));
+	}
+
+	@Test
+	void loginSucceedsWhenCourseLookupFails() throws Exception {
+		when(authenticator.authenticate(STUDENT, "pw"))
+				.thenReturn(new StudentLogin(new SejongStudent(STUDENT, "홍길동"), TERM, null));
+
+		MockHttpSession session = login(STUDENT);
+
+		mvc.perform(get("/consents").session(session))
+				.andExpect(status().isOk())
+				.andExpect(content().string(Matchers.containsString("수강 정보를 새로 불러오지 못해")))
+				.andExpect(content().string(Matchers.containsString("과목000304-001")));
 	}
 
 	@Test
@@ -220,6 +258,18 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	@Test
 	void consentPagesRequireStudentLogin() throws Exception {
 		mvc.perform(get("/consents")).andExpect(redirectedUrl("/login"));
+	}
+
+	private MockHttpSession login(String studentId) throws Exception {
+		MvcResult result = mvc.perform(formLogin("/login").user(studentId).password("pw"))
+				.andExpect(authenticated())
+				.andReturn();
+		return (MockHttpSession) result.getRequest().getSession(false);
+	}
+
+	private static SjptCourse sjptCourse(String code, String name, String schedule) {
+		String[] parts = code.split("-");
+		return new SjptCourse(parts[0], parts[1], code, name, "컴퓨터공학과", "전공필수", "3.0", schedule, "2026/2학기", "대학");
 	}
 
 	private long enrollmentId(String studentId, String courseCode) {

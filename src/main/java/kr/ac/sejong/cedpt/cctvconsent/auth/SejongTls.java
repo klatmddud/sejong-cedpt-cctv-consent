@@ -5,7 +5,7 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 /**
- * 세종대 포털 서버(portal, classic)는 TLS 1.2 + TLS_RSA_WITH_AES_256_CBC_SHA만 지원한다.
+ * 세종대 포털 서버(portal, sjpt)는 TLS 1.2 + TLS_RSA_WITH_AES_256_CBC_SHA만 지원한다.
  * JDK 24+는 jdk.tls.disabledAlgorithms 기본값에 "TLS_RSA_*"를 포함하므로 handshake_failure가 난다.
  *
  * 이 설정은 JVM 전체에 적용되며, JSSE가 속성을 처음 읽기 전(첫 TLS 연결 전)에 호출되어야 한다.

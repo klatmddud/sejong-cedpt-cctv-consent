@@ -25,7 +25,6 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 	implementation 'org.flywaydb:flyway-database-postgresql'
-	implementation 'org.jsoup:jsoup:1.21.1'
 	implementation 'org.dhatim:fastexcel-reader:0.19.0'
 	implementation 'org.apache.pdfbox:pdfbox:3.0.7'
 	runtimeOnly 'org.postgresql:postgresql'
@@ -53,7 +52,7 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 
-	// 로컬 .env 값을 테스트 환경 변수로 넘긴다 (SejongPortalClientLiveTest용, 빈 값은 무시)
+	// 로컬 .env 값을 테스트 환경 변수로 넘긴다 (SjptClientLiveTest용, 빈 값은 무시)
 	def envFile = file('.env')
 	if (envFile.exists()) {
 		envFile.eachLine { line ->

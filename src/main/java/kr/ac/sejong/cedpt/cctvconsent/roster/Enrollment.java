@@ -34,6 +34,14 @@ public class Enrollment {
 	@Column(nullable = false)
 	private boolean inLatestRoster;
 
+	/** 한 번이라도 명부에 있었는지. 명부로 확인된 적 없는 수강만 명부 업로드 때 삭제할 수 있다. */
+	@Column(nullable = false)
+	private boolean everInRoster;
+
+	/** 학생이 마지막으로 로그인했을 때 sjpt에서 확인한 수강인지. 수강 중 = 명부 또는 sjpt에서 확인됨. */
+	@Column(nullable = false)
+	private boolean inSjpt;
+
 	protected Enrollment() {
 	}
 
@@ -47,10 +55,21 @@ public class Enrollment {
 		this.department = department;
 		this.grade = grade;
 		this.inLatestRoster = true;
+		this.everInRoster = true;
 	}
 
 	public void markRemovedFromRoster() {
 		this.inLatestRoster = false;
+	}
+
+	/** 로그인 때 sjpt에서 수강을 확인했다. 학과, 학년은 sjpt에 없으므로 명부 값을 남긴다. */
+	public void confirmBySjpt(String studentName) {
+		this.studentName = studentName;
+		this.inSjpt = true;
+	}
+
+	public void markNotInSjpt() {
+		this.inSjpt = false;
 	}
 
 	public Long getId() {
@@ -79,6 +98,14 @@ public class Enrollment {
 
 	public boolean isInLatestRoster() {
 		return inLatestRoster;
+	}
+
+	public boolean isEverInRoster() {
+		return everInRoster;
+	}
+
+	public boolean isInSjpt() {
+		return inSjpt;
 	}
 
 }

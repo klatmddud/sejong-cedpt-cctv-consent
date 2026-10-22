@@ -9,6 +9,10 @@
 		<span th:text="#{courses.submitted(${submitted})}">2개 수업의 동의서를 제출했습니다.</span>
 	</div>
 
+	<p class="alert error" role="status" th:unless="${student.coursesSynced}" th:text="#{courses.syncFailed}">
+		세종대 학사 시스템에서 수강 정보를 새로 불러오지 못해 이전에 확인한 수업으로 보여 줍니다.
+	</p>
+
 	<div class="page-head">
 		<h1 th:text="#{courses.title}">내 수업</h1>
 		<p class="muted" style="font-size: 14px" th:text="#{courses.lead}">실습실 CCTV 촬영 동의서는 학기마다 수업별로 한 번씩 제출합니다.</p>

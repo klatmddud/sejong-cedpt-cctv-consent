@@ -9,11 +9,40 @@
 
 		<div class="alert ok" th:if="${result}" th:object="${result}">
 			<strong th:text="*{year} + '-' + *{term} + '학기 명부를 반영했습니다.'">2026-2학기 명부를 반영했습니다.</strong>
-			<span th:text="|수업 *{courseCount}개 · 동의 대상 *{enrollmentCount}건 · 학생 *{studentCount}명 · 추가 *{addedCount}건 · 제외 *{removedCount}건|">
-				수업 56개 · 동의 대상 1789건 · 학생 1156명 · 추가 1789건 · 제외 0건
+			<span th:text="|수업 *{courseCount}개 · 동의 대상 *{enrollmentCount}건 · 학생 *{studentCount}명 · 추가 *{addedCount}건 · 제외 *{removedCount}건 · 삭제 *{deletedCount}건(동의서 *{deletedConsentCount}건)|">
+				수업 56개 · 동의 대상 1789건 · 학생 1156명 · 추가 1789건 · 제외 0건 · 삭제 0건(동의서 0건)
 			</span>
 		</div>
 		<p class="alert error" th:if="${error}" th:text="${error}">명부 내용이 맞지 않는 과목이 있습니다.</p>
+
+		<div class="alert error" th:if="${pending}" th:object="${pending}">
+			<strong th:text="|*{fileName}: 동의서 ${#lists.size(pending.deletions)}건이 삭제됩니다.|">명부.xlsx: 동의서 2건이 삭제됩니다.</strong>
+			<p>아래 학생은 로그인 때 수강이 확인되어 동의서를 냈지만 이 명부의 수업 명단에는 없습니다.
+				수강정정 기간에 취소한 것으로 보고 수강과 동의서를 삭제합니다. 삭제하면 되돌릴 수 없습니다.</p>
+			<div class="table-wrap">
+				<table>
+					<thead>
+					<tr><th>학번</th><th>이름</th><th>학수번호</th><th>과목명</th></tr>
+					</thead>
+					<tbody>
+					<tr th:each="deletion : *{deletions}">
+						<td th:text="${deletion.studentId}">20010001</td>
+						<td th:text="${deletion.studentName}">홍길동</td>
+						<td th:text="${deletion.courseCode}">000304-001</td>
+						<td th:text="${deletion.courseName}">과목</td>
+					</tr>
+					</tbody>
+				</table>
+			</div>
+			<div class="confirm-actions">
+				<form th:action="@{/admin/roster/confirm}" method="post">
+					<button type="submit" class="primary">삭제하고 명부 반영</button>
+				</form>
+				<form th:action="@{/admin/roster/cancel}" method="post">
+					<button type="submit" class="secondary">취소</button>
+				</form>
+			</div>
+		</div>
 
 		<form th:action="@{/admin/roster}" method="post" enctype="multipart/form-data" class="upload">
 			<label>수강명부 (xlsx)
@@ -29,7 +58,8 @@
 		<ul class="notes muted">
 			<li>학사 시스템에서 내려받은 컴퓨터공학과 전체 수강명부(출석부 형식)를 그대로 올리세요.</li>
 			<li>강의실이 B201, B202, B203, B206, B207인 수업만 동의 대상으로 저장됩니다.</li>
-			<li>같은 학기 명부를 다시 올리면 새 학생만 추가되고, 이미 받은 동의는 그대로 유지됩니다.</li>
+			<li>같은 학기 명부를 다시 올리면 새 학생만 추가되고, 이전 명부로 받은 동의는 그대로 유지됩니다.</li>
+			<li>명부 수업의 명단에 없는 학생이 로그인으로만 확인된 수강(수강정정 기간 취소)은 동의서와 함께 삭제됩니다. 동의서가 있으면 반영 전에 확인을 받습니다.</li>
 		</ul>
 	</section>
 

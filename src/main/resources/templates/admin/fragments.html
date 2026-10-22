@@ -32,6 +32,7 @@
 				<th class="num">동의 대상</th>
 				<th class="num">추가</th>
 				<th class="num">제외</th>
+				<th class="num">삭제(동의)</th>
 			</tr>
 			</thead>
 			<tbody>
@@ -43,6 +44,7 @@
 				<td class="num" th:text="${upload.enrollmentCount}">1789</td>
 				<td class="num" th:text="${upload.addedCount}">0</td>
 				<td class="num" th:text="${upload.removedCount}">0</td>
+				<td class="num" th:text="|${upload.deletedCount}(${upload.deletedConsentCount})|">0(0)</td>
 			</tr>
 			</tbody>
 		</table>

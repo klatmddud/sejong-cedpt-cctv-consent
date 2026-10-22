@@ -180,6 +180,27 @@ form.upload button.primary {
 	width: auto;
 }
 
+.confirm-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.confirm-actions button.primary {
+	width: auto;
+}
+
+button.secondary {
+	padding: 10px 16px;
+	border: 1px solid currentColor;
+	border-radius: 6px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
 .alert {
 	display: grid;
 	gap: 2px;

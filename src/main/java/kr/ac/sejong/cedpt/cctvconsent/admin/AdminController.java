@@ -1,9 +1,11 @@
 package kr.ac.sejong.cedpt.cctvconsent.admin;
 
 import jakarta.servlet.http.HttpSession;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.Serializable;
 import java.time.LocalDate;
+import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterParseException;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService;
@@ -25,6 +27,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 @RequestMapping("/admin")
 class AdminController {
+
+	/** 동의서 삭제 확인을 기다리는 업로드. 확인하면 같은 파일로 다시 반영한다. */
+	record PendingRoster(String fileName, byte[] content, LocalDate endsOn,
+			List<RosterImportService.ConsentDeletion> deletions) implements Serializable {
+	}
+
+	private static final String PENDING_ROSTER = "pendingRoster";
 
 	private final RosterImportService importService;
 	private final RosterQueryService queries;
@@ -60,7 +69,8 @@ class AdminController {
 	}
 
 	@GetMapping("/roster")
-	String rosterForm(Model model) {
+	String rosterForm(HttpSession session, Model model) {
+		model.addAttribute("pending", session.getAttribute(PENDING_ROSTER));
 		model.addAttribute("uploads", queries.recentUploads());
 		return "admin/roster";
 	}
@@ -68,21 +78,64 @@ class AdminController {
 	@PostMapping("/roster")
 	String uploadRoster(@RequestParam("file") MultipartFile file,
 			@RequestParam("endsOn") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endsOn,
-			RedirectAttributes redirect) {
+			HttpSession session, RedirectAttributes redirect) {
+		session.removeAttribute(PENDING_ROSTER);
 		String fileName = fileName(file);
 		if (file.isEmpty() || !fileName.toLowerCase().endsWith(".xlsx")) {
 			redirect.addFlashAttribute("error", "수강명부 xlsx 파일을 선택하세요.");
 			return "redirect:/admin/roster";
 		}
-		try (InputStream in = file.getInputStream()) {
-			redirect.addFlashAttribute("result", importService.importRoster(fileName, in, endsOn));
+		byte[] content;
+		try {
+			content = file.getBytes();
+		}
+		catch (IOException ex) {
+			redirect.addFlashAttribute("error", "업로드한 파일을 읽을 수 없습니다.");
+			return "redirect:/admin/roster";
+		}
+		try {
+			redirect.addFlashAttribute("result", importService.importRoster(fileName,
+					new ByteArrayInputStream(content), endsOn, List.of()));
+		}
+		catch (RosterImportService.ConfirmationRequiredException ex) {
+			session.setAttribute(PENDING_ROSTER, new PendingRoster(fileName, content, endsOn, ex.getDeletions()));
 		}
 		catch (RosterParseException ex) {
 			redirect.addFlashAttribute("error", ex.getMessage());
 		}
-		catch (IOException ex) {
-			redirect.addFlashAttribute("error", "업로드한 파일을 읽을 수 없습니다.");
+		return "redirect:/admin/roster";
+	}
+
+	/**
+	 * 명부에 없는 수강의 동의서 삭제를 확인하고 보류한 명부를 반영한다.
+	 * 확인 화면 이후 삭제 대상 동의서가 늘었으면 반영하지 않고 새 목록으로 다시 확인받는다.
+	 */
+	@PostMapping("/roster/confirm")
+	String confirmRoster(HttpSession session, RedirectAttributes redirect) {
+		if (!(session.getAttribute(PENDING_ROSTER) instanceof PendingRoster pending)) {
+			redirect.addFlashAttribute("error", "확인할 업로드가 없습니다. 명부를 다시 올려 주세요.");
+			return "redirect:/admin/roster";
 		}
+		try {
+			redirect.addFlashAttribute("result", importService.importRoster(pending.fileName(),
+					new ByteArrayInputStream(pending.content()), pending.endsOn(), pending.deletions()));
+			session.removeAttribute(PENDING_ROSTER);
+		}
+		catch (RosterImportService.ConfirmationRequiredException ex) {
+			session.setAttribute(PENDING_ROSTER,
+					new PendingRoster(pending.fileName(), pending.content(), pending.endsOn(), ex.getDeletions()));
+			redirect.addFlashAttribute("error", "확인하는 사이 삭제될 동의서가 바뀌었습니다. 목록을 다시 확인하세요.");
+		}
+		catch (RosterParseException ex) {
+			session.removeAttribute(PENDING_ROSTER);
+			redirect.addFlashAttribute("error", ex.getMessage());
+		}
+		return "redirect:/admin/roster";
+	}
+
+	@PostMapping("/roster/cancel")
+	String cancelRoster(HttpSession session) {
+		session.removeAttribute(PENDING_ROSTER);
 		return "redirect:/admin/roster";
 	}
 

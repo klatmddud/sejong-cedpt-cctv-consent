@@ -40,11 +40,19 @@ public class RosterUpload {
 	@Column(nullable = false)
 	private int removedCount;
 
+	/** 명부에 없어 삭제한 sjpt 확인 수강 수 */
+	@Column(nullable = false)
+	private int deletedCount;
+
+	/** 그중 동의서가 있던 수 */
+	@Column(nullable = false)
+	private int deletedConsentCount;
+
 	protected RosterUpload() {
 	}
 
 	public RosterUpload(Semester semester, String fileName, int courseCount, int enrollmentCount,
-			int addedCount, int removedCount) {
+			int addedCount, int removedCount, int deletedCount, int deletedConsentCount) {
 		this.semester = semester;
 		this.fileName = fileName;
 		this.uploadedAt = OffsetDateTime.now();
@@ -52,6 +60,8 @@ public class RosterUpload {
 		this.enrollmentCount = enrollmentCount;
 		this.addedCount = addedCount;
 		this.removedCount = removedCount;
+		this.deletedCount = deletedCount;
+		this.deletedConsentCount = deletedConsentCount;
 	}
 
 	public Long getId() {
@@ -84,6 +94,14 @@ public class RosterUpload {
 
 	public int getRemovedCount() {
 		return removedCount;
+	}
+
+	public int getDeletedCount() {
+		return deletedCount;
+	}
+
+	public int getDeletedConsentCount() {
+		return deletedConsentCount;
 	}
 
 }
