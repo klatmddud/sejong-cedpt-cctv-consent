@@ -4,71 +4,116 @@
 <body>
 <header th:replace="~{admin/fragments :: nav('roster')}"></header>
 <main class="page">
-	<section class="card">
-		<h2>수강명부 업로드</h2>
+	<div class="page-head">
+		<div class="page-title">
+			<span class="eyebrow">명부 업로드</span>
+			<h1>수강명부 업로드</h1>
+			<p class="muted">학사 시스템에서 내려받은 출석부 형식 xlsx를 올리면 동의 대상 수업과 수강생이 갱신됩니다.</p>
+		</div>
+	</div>
 
-		<div class="alert ok" th:if="${result}" th:object="${result}">
-			<strong th:text="*{year} + '-' + *{term} + '학기 명부를 반영했습니다.'">2026-2학기 명부를 반영했습니다.</strong>
-			<span th:text="|수업 *{courseCount}개 · 동의 대상 *{enrollmentCount}건 · 학생 *{studentCount}명 · 추가 *{addedCount}건 · 제외 *{removedCount}건 · 삭제 *{deletedCount}건(동의서 *{deletedConsentCount}건)|">
-				수업 56개 · 동의 대상 1789건 · 학생 1156명 · 추가 1789건 · 제외 0건 · 삭제 0건(동의서 0건)
+	<div class="alert ok" th:if="${result}" th:object="${result}">
+		<strong th:text="*{year} + '-' + *{term} + '학기 명부를 반영했습니다.'">2026-2학기 명부를 반영했습니다.</strong>
+		<span th:text="|수업 *{courseCount}개 · 동의 대상 *{enrollmentCount}건 · 학생 *{studentCount}명 · 추가 *{addedCount}건 · 제외 *{removedCount}건 · 삭제 *{deletedCount}건(동의서 *{deletedConsentCount}건)|">
+			수업 56개 · 동의 대상 1789건 · 학생 1156명 · 추가 1789건 · 제외 0건 · 삭제 0건(동의서 0건)
+		</span>
+	</div>
+	<p class="alert error" th:if="${error}" th:text="${error}">명부 내용이 맞지 않는 과목이 있습니다.</p>
+
+	<section class="card pending" role="alert" th:if="${pending}" th:object="${pending}">
+		<div class="pending-head">
+			<span class="dialog-icon danger" aria-hidden="true">
+				<svg th:replace="~{admin/fragments :: icon-warn}"></svg>
 			</span>
-		</div>
-		<p class="alert error" th:if="${error}" th:text="${error}">명부 내용이 맞지 않는 과목이 있습니다.</p>
-
-		<div class="alert error" th:if="${pending}" th:object="${pending}">
-			<strong th:text="|*{roster.fileNames}: 동의서 ${#lists.size(pending.deletions)}건이 삭제됩니다.|">명부.xlsx: 동의서 2건이 삭제됩니다.</strong>
-			<p>아래 학생은 로그인 때 수강이 확인되어 동의서를 냈지만 이 명부의 수업 명단에는 없습니다.
-				수강정정 기간에 취소한 것으로 보고 수강과 동의서를 삭제합니다. 삭제하면 되돌릴 수 없습니다.</p>
-			<div class="table-wrap">
-				<table>
-					<thead>
-					<tr><th>학번</th><th>이름</th><th>학수번호</th><th>과목명</th></tr>
-					</thead>
-					<tbody>
-					<tr th:each="deletion : *{deletions}">
-						<td th:text="${deletion.studentId}">20010001</td>
-						<td th:text="${deletion.studentName}">홍길동</td>
-						<td th:text="${deletion.courseCode}">000304-001</td>
-						<td th:text="${deletion.courseName}">과목</td>
-					</tr>
-					</tbody>
-				</table>
-			</div>
-			<div class="confirm-actions">
-				<form th:action="@{/admin/roster/confirm}" method="post">
-					<button type="submit" class="primary">삭제하고 명부 반영</button>
-				</form>
-				<form th:action="@{/admin/roster/cancel}" method="post">
-					<button type="submit" class="secondary">취소</button>
-				</form>
+			<div>
+				<h2 th:text="|*{roster.fileNames}: 동의서 ${#lists.size(pending.deletions)}건이 삭제됩니다|">명부.xlsx: 동의서 2건이 삭제됩니다</h2>
+				<p>아래 학생은 로그인 때 수강이 확인되어 동의서를 냈지만 이 명부의 수업 명단에는 없습니다.
+					수강정정 기간에 취소한 것으로 보고 수강과 동의서를 삭제합니다. 삭제하면 되돌릴 수 없습니다.</p>
 			</div>
 		</div>
-
-		<form th:action="@{/admin/roster}" method="post" enctype="multipart/form-data" class="upload">
-			<div class="dropzone" id="roster-dropzone">
-				<label for="roster-files">
-					<strong>수강명부 xlsx 파일을 여기에 끌어다 놓으세요</strong>
-					<span class="muted small">또는 눌러서 파일 선택 · 여러 개 함께 올릴 수 있습니다</span>
-				</label>
-				<input id="roster-files" class="visually-hidden" type="file" name="file" accept=".xlsx" multiple required>
-				<p class="dropzone-error" id="roster-file-error" role="alert" hidden>xlsx 파일만 올릴 수 있습니다. 다른 파일은 선택하지 않았습니다.</p>
-				<ul class="dropzone-files" id="roster-file-list" aria-live="polite"></ul>
-			</div>
-			<button type="submit" class="primary">업로드</button>
+		<div class="table-wrap boxed">
+			<table>
+				<thead>
+				<tr><th>학번</th><th>이름</th><th>학수번호</th><th>과목명</th></tr>
+				</thead>
+				<tbody>
+				<tr th:each="deletion : *{deletions}">
+					<td class="tabular" th:text="${deletion.studentId}">20990001</td>
+					<td th:text="${deletion.studentName}">[이름]</td>
+					<td class="tabular" th:text="${deletion.courseCode}">000304-001</td>
+					<td class="strong" th:text="${deletion.courseName}">과목</td>
+				</tr>
+				</tbody>
+			</table>
+		</div>
+		<!--/* 확인란은 반영 폼에 넣어 required로도 막는다. 반영 버튼은 처음부터 꺼 두고 체크하면 스크립트(admin-roster.js)가 켠다 */-->
+		<form id="roster-confirm" th:action="@{/admin/roster/confirm}" method="post">
+			<label class="check-label">
+				<input type="checkbox" id="roster-ack" required>
+				<span th:text="|삭제되는 동의서 ${#lists.size(pending.deletions)}건을 확인했습니다.|">삭제되는 동의서 2건을 확인했습니다.</span>
+			</label>
 		</form>
-
-		<ul class="notes muted">
-			<li>학사 시스템에서 내려받은 컴퓨터공학과 수강명부(출석부 형식)를 그대로 올리세요.</li>
-			<li>단과대학별 명부(소프트웨어융합대학, 인공지능융합대학)는 함께 올려도 되고 하나씩 따로 올려도 됩니다. 이번에 올린 파일에 있는 수업만 갱신되며, 여러 파일에 같은 수업이 있으면 명단을 합칩니다.</li>
-			<li>강의실이 B201, B202, B203, B206, B207인 수업만 동의 대상으로 저장됩니다.</li>
-			<li>학기는 명부 제목(예: 2026년도 2학기 출석부)에서 읽습니다. 학기 종료일은 1학기 6월 30일, 2학기 12월 31일이며, 동의서는 그로부터 1년 뒤 일괄 파기됩니다.</li>
-			<li>같은 학기 명부를 다시 올리면 새 학생만 추가되고, 이전 명부로 받은 동의는 그대로 유지됩니다.</li>
-			<li>명부 수업의 명단에 없는 학생이 로그인으로만 확인된 수강(수강정정 기간 취소)은 동의서와 함께 삭제됩니다. 동의서가 있으면 반영 전에 확인을 받습니다.</li>
-		</ul>
+		<div class="confirm-actions">
+			<button type="submit" form="roster-confirm" class="button danger" id="roster-apply"
+					data-busy-label="반영 중…" disabled>삭제하고 명부 반영</button>
+			<form th:action="@{/admin/roster/cancel}" method="post">
+				<button type="submit" class="button outline">취소</button>
+			</form>
+		</div>
 	</section>
 
-	<section th:replace="~{admin/fragments :: uploads(${uploads})}"></section>
+	<div class="roster-columns">
+		<section class="card">
+			<h2>파일 올리기</h2>
+			<form th:action="@{/admin/roster}" method="post" enctype="multipart/form-data" class="upload">
+				<div class="dropzone" id="roster-dropzone">
+					<label for="roster-files">
+						<span class="dropzone-icon" aria-hidden="true">
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+								 stroke-linecap="round" stroke-linejoin="round">
+								<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path>
+								<path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
+								<path d="M12 18v-6"></path>
+								<path d="m9 15 3-3 3 3"></path>
+							</svg>
+						</span>
+						<strong class="dropzone-title">수강명부 xlsx 파일을 여기에 끌어다 놓으세요</strong>
+						<strong class="dropzone-title-over" aria-hidden="true">놓으면 추가됩니다</strong>
+						<span class="muted small">또는 눌러서 파일 선택 · xlsx 여러 개를 함께 올릴 수 있습니다</span>
+					</label>
+					<input id="roster-files" class="visually-hidden" type="file" name="file" accept=".xlsx" multiple required>
+				</div>
+				<p class="field-error" id="roster-file-error" role="alert" hidden>
+					<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+						 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="10"></circle>
+						<path d="M12 8v4"></path>
+						<path d="M12 16h.01"></path>
+					</svg>
+					<span>xlsx 파일만 올릴 수 있습니다. 다른 파일은 제외했습니다.</span>
+				</p>
+				<ul class="file-list" id="roster-file-list" aria-live="polite" aria-label="고른 파일"></ul>
+				<!--/* 파일을 고르기 전에는 꺼 둔다. 스크립트가 고른 파일 수에 맞춰 켜고 문구를 바꾼다(admin-roster.js) */-->
+				<button type="submit" class="button primary block" id="roster-upload" data-busy-label="업로드 중…" disabled>업로드할 파일을 선택하세요</button>
+			</form>
+		</section>
+
+		<section class="card">
+			<h2>업로드 안내</h2>
+			<ol class="steps">
+				<li>학사 시스템에서 내려받은 컴퓨터공학과 수강명부(출석부 형식)를 그대로 올리세요.</li>
+				<li>단과대학별 명부(소프트웨어융합대학, 인공지능융합대학)는 함께 올려도 되고 하나씩 따로 올려도 됩니다. 이번에 올린 파일에 있는 수업만 갱신되며, 여러 파일에 같은 수업이 있으면 명단을 합칩니다.</li>
+				<li>강의실이 B201, B202, B203, B206, B207인 수업만 동의 대상으로 저장됩니다.</li>
+				<li>학기는 명부 제목(예: 2026년도 2학기 출석부)에서 읽습니다. 학기 종료일은 1학기 6월 30일, 2학기 12월 31일이며, 동의서는 그로부터 1년 뒤 일괄 파기됩니다.</li>
+				<li>같은 학기 명부를 다시 올리면 새 학생만 추가되고, 이전 명부로 받은 동의는 그대로 유지됩니다.</li>
+				<li>명부 수업의 명단에 없는 학생이 로그인으로만 확인된 수강(수강정정 기간 취소)은 동의서와 함께 삭제됩니다. 동의서가 있으면 반영 전에 확인을 받습니다.</li>
+			</ol>
+		</section>
+	</div>
+
+	<section th:replace="~{admin/fragments :: uploads(${uploads}, false)}"></section>
 </main>
+<script th:src="@{/js/admin-dialogs.js}"></script>
 <script th:src="@{/js/admin-roster.js}"></script>
 </body>
 </html>

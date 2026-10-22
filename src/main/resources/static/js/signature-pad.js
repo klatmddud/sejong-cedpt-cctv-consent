@@ -1,5 +1,6 @@
 // 동의서 서명 패드: 마우스, 터치, 펜 모두 Pointer Events로 받는다.
 // 제출할 때 투명 배경 PNG(data URL)를 hidden input에 넣는다.
+// 서명이 생기거나 지워지면 canvas에 signaturechange 이벤트(detail.signed)를 보낸다(consent-form.js가 단계 표시에 쓴다).
 (() => {
 	const canvas = document.getElementById('signature-pad');
 	if (!canvas) {
@@ -14,6 +15,13 @@
 	let hasInk = false;
 	let last = null;
 
+	function setInk(value) {
+		if (hasInk !== value) {
+			hasInk = value;
+			canvas.dispatchEvent(new CustomEvent('signaturechange', {detail: {signed: value}}));
+		}
+	}
+
 	function resize() {
 		// 화면 크기가 바뀌면 그린 내용이 늘어나 왜곡되므로 지우고 새로 맞춘다
 		const ratio = Math.max(window.devicePixelRatio || 1, 1);
@@ -25,7 +33,7 @@
 		context.lineCap = 'round';
 		context.lineJoin = 'round';
 		context.strokeStyle = '#111';
-		hasInk = false;
+		setInk(false);
 	}
 
 	function point(event) {
@@ -54,7 +62,7 @@
 		context.lineTo(next.x, next.y);
 		context.stroke();
 		last = next;
-		hasInk = true;
+		setInk(true);
 		error.hidden = true;
 	});
 
@@ -66,7 +74,7 @@
 
 	clearButton.addEventListener('click', () => {
 		context.clearRect(0, 0, canvas.width, canvas.height);
-		hasInk = false;
+		setInk(false);
 	});
 
 	form.addEventListener('submit', (event) => {

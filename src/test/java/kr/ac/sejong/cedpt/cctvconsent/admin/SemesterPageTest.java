@@ -121,7 +121,7 @@ class SemesterPageTest {
 
 	private static CourseSummary course(String code, String room, String schedule, long students, int unsubmitted) {
 		List<StudentSummary> missing = java.util.stream.IntStream.range(0, unsubmitted)
-				.mapToObj(i -> new StudentSummary("2001000" + i, "학생" + i, false))
+				.mapToObj(i -> new StudentSummary("2001000" + i, "학생" + i, false, false))
 				.toList();
 		return new CourseSummary(code, "과목" + code, "김교수", schedule, room, students, CourseTime.parse(schedule),
 				missing, students, 0);

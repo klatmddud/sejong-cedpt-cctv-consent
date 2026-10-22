@@ -8,18 +8,48 @@
 </head>
 <body>
 <header th:fragment="nav(active)" class="topbar">
-	<a class="brand" th:href="@{/admin}">CCTV 동의서 관리</a>
-	<nav>
-		<a th:href="@{/admin}" th:classappend="${active == 'dashboard'} ? 'active'">학기 현황</a>
-		<a th:href="@{/admin/roster}" th:classappend="${active == 'roster'} ? 'active'">명부 업로드</a>
-		<form th:action="@{/admin/logout}" method="post">
-			<button type="submit" class="link">로그아웃</button>
-		</form>
-	</nav>
+	<div class="topbar-inner">
+		<a class="brand" th:href="@{/admin}">
+			<!--/* 교표 자리. 원본 파일을 받으면 이 span을 <img class="brand-mark" th:src="@{/img/파일이름}" alt="">로 바꾼다.
+				옆 글자가 학교 이름을 읽어 주므로 alt는 비워 둔다 */-->
+			<span class="brand-mark" aria-hidden="true">세종</span>
+			<span class="brand-text">
+				<span class="brand-eyebrow">세종대학교 컴퓨터공학과</span>
+				<span class="brand-name">CCTV 동의서 관리</span>
+			</span>
+		</a>
+		<nav aria-label="관리자 메뉴">
+			<a th:href="@{/admin}" th:attr="aria-current=${active == 'dashboard'} ? 'page'">학기 현황</a>
+			<a th:href="@{/admin/roster}" th:attr="aria-current=${active == 'roster'} ? 'page'">명부 업로드</a>
+			<span class="nav-divider" aria-hidden="true"></span>
+			<form th:action="@{/logout}" method="post">
+				<button type="submit" class="nav-button">
+					<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+						 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+						<path d="m16 17 5-5-5-5"></path>
+						<path d="M21 12H9"></path>
+					</svg>
+					<span>로그아웃</span>
+				</button>
+			</form>
+		</nav>
+	</div>
 </header>
 
-<section th:fragment="uploads(uploads)" class="card">
-	<h2>최근 업로드</h2>
+<!--/* rosterLink: 명부 업로드 화면으로 가는 링크를 제목 옆에 둘지 */-->
+<section th:fragment="uploads(uploads, rosterLink)" class="card">
+	<div class="card-head">
+		<h2>최근 업로드</h2>
+		<a class="button outline-accent small" th:if="${rosterLink}" th:href="@{/admin/roster}">
+			<span>명부 업로드로 가기</span>
+			<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+				 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M5 12h14"></path>
+				<path d="m12 5 7 7-7 7"></path>
+			</svg>
+		</a>
+	</div>
 	<p class="muted" th:if="${#lists.isEmpty(uploads)}">아직 올린 명부가 없습니다.</p>
 	<div class="table-wrap" th:unless="${#lists.isEmpty(uploads)}">
 		<table>
@@ -37,7 +67,7 @@
 			</thead>
 			<tbody>
 			<tr th:each="upload : ${uploads}">
-				<td th:text="${#temporals.format(upload.uploadedAt.atZoneSameInstant(T(java.time.ZoneId).of('Asia/Seoul')), 'yyyy-MM-dd HH:mm')}">2026-09-01 10:00</td>
+				<td class="tabular" th:text="${#temporals.format(upload.uploadedAt.atZoneSameInstant(T(java.time.ZoneId).of('Asia/Seoul')), 'yyyy-MM-dd HH:mm')}">2026-09-01 10:00</td>
 				<td th:text="${upload.semester}">2026-2학기</td>
 				<td class="file" th:text="${upload.fileName}">명부.xlsx</td>
 				<td class="num" th:text="${upload.courseCount}">56</td>
@@ -50,5 +80,18 @@
 		</table>
 	</div>
 </section>
+
+<!--/* 상태 아이콘: 확인됨(초록 원 안 체크), 주의(삼각형 느낌표) */-->
+<svg th:fragment="icon-ok" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"
+	 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+	<circle cx="12" cy="12" r="10"></circle>
+	<path d="m9 12 2 2 4-4"></path>
+</svg>
+<svg th:fragment="icon-warn" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"
+	 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+	<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
+	<path d="M12 9v4"></path>
+	<path d="M12 17h.01"></path>
+</svg>
 </body>
 </html>

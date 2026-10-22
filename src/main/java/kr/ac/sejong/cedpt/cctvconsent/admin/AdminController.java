@@ -13,13 +13,12 @@ import kr.ac.sejong.cedpt.cctvconsent.roster.CourseDeletionService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterParseException;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService;
+import kr.ac.sejong.cedpt.cctvconsent.roster.SemesterPurge;
 import kr.ac.sejong.cedpt.cctvconsent.roster.TargetRooms;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.LockedException;
-import org.springframework.security.web.WebAttributes;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -58,30 +57,31 @@ class AdminController {
 	private final CourseDeletionService courseDeletion;
 	private final TargetRooms targetRooms;
 	private final ConsentBundleService bundles;
+	private final SemesterPurge semesterPurge;
 
 	AdminController(RosterImportService importService, RosterQueryService queries,
-			CourseDeletionService courseDeletion, TargetRooms targetRooms, ConsentBundleService bundles) {
+			CourseDeletionService courseDeletion, TargetRooms targetRooms, ConsentBundleService bundles,
+			SemesterPurge semesterPurge) {
 		this.importService = importService;
 		this.queries = queries;
 		this.courseDeletion = courseDeletion;
 		this.targetRooms = targetRooms;
 		this.bundles = bundles;
-	}
-
-	@GetMapping("/login")
-	String login(HttpSession session, Model model) {
-		Object error = session.getAttribute(WebAttributes.AUTHENTICATION_EXCEPTION);
-		if (error instanceof LockedException ex) {
-			model.addAttribute("loginError", ex.getMessage());
-		}
-		session.removeAttribute(WebAttributes.AUTHENTICATION_EXCEPTION);
-		return "admin/login";
+		this.semesterPurge = semesterPurge;
 	}
 
 	@GetMapping
 	String dashboard(Model model) {
-		model.addAttribute("semesters", queries.semesters());
+		List<RosterQueryService.SemesterSummary> semesters = queries.semesters();
+		model.addAttribute("semesters", semesters);
 		model.addAttribute("uploads", queries.recentUploads());
+		// 요약은 가장 최근 학기(학기 목록 첫 줄)를 보여 준다
+		if (!semesters.isEmpty()) {
+			RosterQueryService.SemesterSummary current = semesters.get(0);
+			model.addAttribute("dashboard", DashboardView.of(current, queries.courses(current.id()),
+					targetRooms::matching, queries.sjptOnlyEnrollments(current.id()),
+					queries.lastRosterUploadAt(current.id()).orElse(null)));
+		}
 		return "admin/dashboard";
 	}
 
@@ -97,6 +97,25 @@ class AdminController {
 		model.addAttribute("timetable", "timetable".equals(view));
 		model.addAttribute("page", SemesterPage.of(queries.courses(id), room, targetRooms::matching));
 		return "admin/semester";
+	}
+
+	/**
+	 * 학기 하나의 모든 데이터(과목, 수강, 동의서, 업로드 이력)를 지운다. "2026-2학기 초기화"처럼 학기 이름과 "초기화"를
+	 * 정확히 입력해야 지운다.
+	 */
+	@PostMapping("/semesters/{id}/reset")
+	String resetSemester(@PathVariable long id, @RequestParam String confirmText, RedirectAttributes redirect) {
+		try {
+			SemesterPurge.Reset reset = semesterPurge.reset(id, confirmText);
+			AdminAudit.log("학기 초기화: {} (학기 {}), 과목 {}개, 수강 {}건, 동의서 {}건", reset.label(), id,
+					reset.courseCount(), reset.enrollmentCount(), reset.consentCount());
+			redirect.addFlashAttribute("notice", "%s를 초기화했습니다 (과목 %d개, 수강 %d건, 동의서 %d건)."
+					.formatted(reset.label(), reset.courseCount(), reset.enrollmentCount(), reset.consentCount()));
+		}
+		catch (SemesterPurge.ResetRefusedException ex) {
+			redirect.addFlashAttribute("error", ex.getMessage());
+		}
+		return "redirect:/admin";
 	}
 
 	/**

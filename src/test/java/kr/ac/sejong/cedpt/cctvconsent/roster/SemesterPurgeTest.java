@@ -49,6 +49,21 @@ class SemesterPurgeTest extends PostgresTestSupport {
 		assertThat(jdbc.queryForObject("select count(*) from enrollment", Integer.class)).isZero();
 	}
 
+	@Test
+	void resetDeletesOneSemesterWithEverything() {
+		long expired = jdbc.queryForObject("select id from semester where year = 2025", Long.class);
+
+		org.assertj.core.api.Assertions.assertThatThrownBy(() -> purge.reset(expired, "2025-2학기 초기화"))
+				.isInstanceOf(SemesterPurge.ResetRefusedException.class);
+		SemesterPurge.Reset reset = purge.reset(expired, " 2025-1학기 초기화 ");
+
+		assertThat(reset).isEqualTo(new SemesterPurge.Reset("2025-1학기", 1, 1, 1));
+		assertThat(jdbc.queryForList("select year from semester", Integer.class)).containsExactly(2026);
+		assertThat(jdbc.queryForObject("select count(*) from consent_document", Integer.class)).isZero();
+		org.assertj.core.api.Assertions.assertThatThrownBy(() -> purge.reset(expired, "2025-1학기 초기화"))
+				.isInstanceOf(SemesterPurge.ResetRefusedException.class);
+	}
+
 	private long semester(int year, String term, String purgeOn) {
 		return jdbc.queryForObject("""
 				insert into semester (year, term, ends_on, purge_on, created_at)

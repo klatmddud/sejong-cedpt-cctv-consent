@@ -4,195 +4,335 @@
 <body>
 <header th:replace="~{admin/fragments :: nav('dashboard')}"></header>
 <main class="page">
-	<section class="card">
-		<p class="breadcrumb"><a th:href="@{/admin}">학기 현황</a> /</p>
-		<p class="alert ok" th:if="${notice}" th:text="${notice}">공업수학1 000304-001 과목을 지웠습니다.</p>
-		<p class="alert error" th:if="${error}" th:text="${error}">입력한 학수번호가 다릅니다.</p>
-		<div class="semester-head">
-			<div>
-				<h2 th:text="|${semester.label()} 동의서 현황|">2026-2학기 동의서 현황</h2>
-				<p class="muted"
-				   th:text="|수업 ${semester.courseCount}개 · 동의 대상 ${semester.enrollmentCount}건 · 미제출 ${page.unsubmittedCount}건 · 파기 예정일 ${semester.purgeOn}|">
-					수업 56개 · 동의 대상 1789건 · 미제출 412건 · 파기 예정일 2027-12-21
-				</p>
-			</div>
-			<nav class="segmented" aria-label="보기 방식">
-				<a th:href="@{/admin/semesters/{id}(id=${semester.id})}"
-				   th:classappend="${!timetable} ? 'is-on'" th:attr="aria-current=${!timetable} ? 'page'">목록</a>
-				<a th:href="@{/admin/semesters/{id}(id=${semester.id}, view='timetable', room=${page.room})}"
-				   th:classappend="${timetable} ? 'is-on'" th:attr="aria-current=${timetable} ? 'page'">시간표</a>
+	<div class="page-head">
+		<div class="page-title">
+			<nav class="breadcrumb" aria-label="위치">
+				<a th:href="@{/admin}">학기 현황</a>
+				<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+					 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="m9 18 6-6-6-6"></path>
+				</svg>
+				<span aria-current="page">동의서 관리</span>
 			</nav>
+			<h1 th:text="|${semester.label()} 동의서 현황|">2026-2학기 동의서 현황</h1>
+			<p class="muted tabular"
+			   th:text="|수업 ${semester.courseCount}개 · 동의 대상 ${semester.enrollmentCount}건 · 미제출 ${page.unsubmittedCount}건 · 파기 예정일 ${semester.purgeOn}|">
+				수업 56개 · 동의 대상 1789건 · 미제출 412건 · 파기 예정일 2027-12-21
+			</p>
 		</div>
+		<nav class="segmented" aria-label="보기 방식">
+			<a th:href="@{/admin/semesters/{id}(id=${semester.id})}" th:attr="aria-current=${!timetable} ? 'page'">
+				<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+					 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M8 6h13"></path>
+					<path d="M8 12h13"></path>
+					<path d="M8 18h13"></path>
+					<path d="M3 6h.01"></path>
+					<path d="M3 12h.01"></path>
+					<path d="M3 18h.01"></path>
+				</svg>
+				<span>목록</span>
+			</a>
+			<a th:href="@{/admin/semesters/{id}(id=${semester.id}, view='timetable', room=${page.room})}"
+			   th:attr="aria-current=${timetable} ? 'page'">
+				<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+					 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<rect x="3" y="4" width="18" height="18" rx="2"></rect>
+					<path d="M16 2v4"></path>
+					<path d="M8 2v4"></path>
+					<path d="M3 10h18"></path>
+				</svg>
+				<span>시간표</span>
+			</a>
+		</nav>
+	</div>
 
-		<p class="muted" th:if="${#lists.isEmpty(page.groups)}">이 학기에 동의 대상 수업이 없습니다.</p>
+	<p class="alert ok" th:if="${notice}" th:text="${notice}">공업수학1 000304-001 과목을 지웠습니다.</p>
+	<p class="alert error" th:if="${error}" th:text="${error}">입력한 학수번호가 다릅니다.</p>
 
-		<form class="room-groups" id="consent-download" method="post"
-			  th:unless="${timetable or #lists.isEmpty(page.groups)}"
-			  th:action="@{/admin/semesters/{id}/consents/download(id=${semester.id})}">
-			<div class="selection-bar">
-				<label class="check-label">
-					<input type="checkbox" id="select-all-courses">
-					<span>전체 선택</span>
-				</label>
-				<span class="muted small" id="selected-course-count" aria-live="polite">선택한 강의 없음</span>
-				<button type="submit" class="primary" id="download-consents" disabled>선택한 강의 동의서 PDF 받기</button>
+	<p class="card muted" th:if="${#lists.isEmpty(page.groups)}">이 학기에 동의 대상 수업이 없습니다.</p>
+
+	<!--/*
+		검색과 "미제출 있는 강의만"은 화면에서 줄만 숨긴다. 전체 선택, 강의실 전체 선택은 보이는 강의만 고르거나 푼다.
+		숨기기 전에 고른 강의는 숨겨져도 고른 채로 남아 함께 받는다(선택 수에 숨긴 강의 수를 따로 적는다).
+	*/-->
+	<form class="room-groups" id="consent-download" method="post"
+		  th:unless="${timetable or #lists.isEmpty(page.groups)}"
+		  th:action="@{/admin/semesters/{id}/consents/download(id=${semester.id})}">
+		<div class="selection-bar">
+			<label class="check-label">
+				<input type="checkbox" id="select-all-courses">
+				<span>전체 선택</span>
+			</label>
+			<span class="selection-count" id="selected-course-count" aria-live="polite">선택한 강의 없음</span>
+			<label class="search-field">
+				<span class="visually-hidden">강의 검색</span>
+				<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+					 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="11" cy="11" r="8"></circle>
+					<path d="m21 21-4.3-4.3"></path>
+				</svg>
+				<input type="search" id="course-search" placeholder="과목명·학수번호 검색" autocomplete="off">
+			</label>
+			<button type="button" class="button outline small toggle" id="only-unsubmitted" aria-pressed="false">
+				<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+					 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path>
+				</svg>
+				<span>미제출 있는 강의만</span>
+			</button>
+			<button type="submit" class="button primary" id="download-consents" disabled>
+				<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+					 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+					<path d="m7 10 5 5 5-5"></path>
+					<path d="M12 15V3"></path>
+				</svg>
+				<span>선택한 강의 동의서 PDF 받기</span>
+			</button>
+		</div>
+		<div class="filter-empty" id="filter-empty" hidden>
+			<strong>조건에 맞는 강의가 없습니다</strong>
+			<button type="button" class="button outline small" id="clear-filters">필터 지우기</button>
+		</div>
+		<section class="room-group" th:each="group : ${page.groups}"
+				 th:with="rate=${group.studentCount == 0 ? 0 : (group.studentCount - group.unsubmittedCount) * 100 / group.studentCount}">
+			<div class="room-group-head">
+				<div class="room-group-title">
+					<h2 th:text="${group.room}">센B201</h2>
+					<span class="muted small tabular">수업 <span th:text="${#lists.size(group.courses)}">10</span>개
+						· 학생 <span th:text="${group.studentCount}">291</span>명
+						· 미제출 <strong class="accent-text" th:text="|${group.unsubmittedCount}명|">64명</strong></span>
+				</div>
+				<div class="room-group-rate">
+					<span class="rate-bar ok"><span th:style="|width: ${rate}%|"></span></span>
+					<span class="small strong tabular" th:text="|${rate}% 제출|">78% 제출</span>
+				</div>
 			</div>
-			<div class="room-group" th:each="group : ${page.groups}">
-				<div class="room-group-head">
-					<h3 th:text="${group.room}">센B201</h3>
-					<span class="muted"
-						  th:text="|수업 ${#lists.size(group.courses)}개 · 학생 ${group.studentCount}명 · 미제출 ${group.unsubmittedCount}명|">
-						수업 10개 · 학생 291명 · 미제출 64명
+			<div class="course-table">
+				<div class="course-line course-table-head">
+					<label class="course-check">
+						<input type="checkbox" class="select-room" th:attr="aria-label=|${group.room} 전체 선택|">
+					</label>
+					<span class="course-cols">
+						<span>학수번호</span>
+						<span>과목명</span>
+						<span>담당교수</span>
+						<span>강의시간</span>
+						<span class="num">학생</span>
+						<span class="num">미제출 학생</span>
 					</span>
 				</div>
-				<div class="course-table">
-					<div class="course-line course-table-head">
-						<label class="course-check">
-							<input type="checkbox" class="select-room" th:attr="aria-label=|${group.room} 전체 선택|">
-						</label>
+				<div class="course-line" th:each="course : ${group.courses}"
+					 th:attr="data-search=|${course.name} ${course.code}|,data-unsubmitted=${course.unsubmittedCount()}">
+					<label class="course-check">
+						<input type="checkbox" name="codes" th:value="${course.code}"
+							   th:attr="aria-label=|${course.name} ${course.code} 선택|">
+					</label>
+					<button type="button" class="course-row" th:attr="data-dialog=|course-${course.code}|">
 						<span class="course-cols">
-							<span>강의실</span>
-							<span>학수번호</span>
-							<span>과목명</span>
-							<span>담당교수</span>
-							<span>강의시간</span>
-							<span class="num">학생</span>
-							<span class="num">미제출 학생</span>
-						</span>
-					</div>
-					<div class="course-line" th:each="course : ${group.courses}">
-						<label class="course-check">
-							<input type="checkbox" name="codes" th:value="${course.code}"
-								   th:attr="aria-label=|${course.name} ${course.code} 선택|">
-						</label>
-						<button type="button" class="course-row" th:attr="data-dialog=|course-${course.code}|">
-							<span class="course-cols">
-								<span th:text="${course.room}">센B201</span>
-								<span class="tabular" th:text="${course.code}">000304-001</span>
-								<span class="course-name" th:text="${course.name}">공업수학1</span>
-								<span th:text="${course.professor}">홍길동</span>
-								<span class="tabular" th:text="${course.schedule}">월10:30-12:00</span>
-								<span class="num" th:text="${course.studentCount}">19</span>
+							<span class="tabular secondary-text" th:text="${course.code}">000304-001</span>
+							<span class="course-name" th:text="${course.name}">공업수학1</span>
+							<span class="secondary-text" th:text="${course.professor}">[담당교수]</span>
+							<span class="tabular" th:text="${course.schedule}">월10:30-12:00</span>
+							<span class="num" th:text="${course.studentCount}">19</span>
+							<span class="unsubmitted-cell">
+								<span class="mini-bar"><span
+										th:style="|width: ${course.studentCount == 0 ? 0 : course.unsubmittedCount() * 100 / course.studentCount}%|"></span></span>
 								<span class="num" th:classappend="${course.unsubmittedCount() > 0} ? 'unsubmitted' : 'muted'"
 									  th:text="${course.unsubmittedCount()}">7</span>
 							</span>
-						</button>
-					</div>
+						</span>
+					</button>
 				</div>
 			</div>
-			<p class="muted small">PDF에는 강의마다 시작 표지, 받은 동의서(학번 순), 끝 표지가 들어갑니다. 동의서가 많으면 만드는 데 시간이 걸릴 수 있습니다.</p>
-		</form>
+		</section>
+		<p class="note plain">
+			<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+				 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<circle cx="12" cy="12" r="10"></circle>
+				<path d="M12 16v-4"></path>
+				<path d="M12 8h.01"></path>
+			</svg>
+			<span>PDF에는 강의마다 시작 표지, 받은 동의서(학번 순), 끝 표지가 들어갑니다. 동의서가 많으면 만드는 데 시간이 걸릴 수 있습니다.</span>
+		</p>
+	</form>
 
-		<div class="timetable-view" th:if="${timetable and page.room != null}">
+	<section class="card timetable-view" th:if="${timetable and page.room != null}">
+		<div class="timetable-toolbar">
 			<nav class="room-tabs" aria-label="강의실">
 				<a th:each="group : ${page.groups}"
 				   th:href="@{/admin/semesters/{id}(id=${semester.id}, view='timetable', room=${group.room})}"
-				   th:classappend="${group.room == page.room} ? 'is-on'"
-				   th:attr="aria-current=${group.room == page.room} ? 'page'"
-				   th:text="|${group.room} · ${#lists.size(group.courses)}|">센B201 · 10</a>
+				   th:attr="aria-current=${group.room == page.room} ? 'page'">
+					<span th:text="${group.room}">센B201</span>
+					<span class="tab-count" th:text="${#lists.size(group.courses)}"
+						  th:attr="aria-label=|수업 ${#lists.size(group.courses)}개|">10</span>
+				</a>
 			</nav>
-			<div class="timetable-wrap">
-				<div class="timetable" th:style="|grid-template-columns: 60px repeat(${#lists.size(page.days)}, minmax(0, 1fr))|">
-					<div class="timetable-head"></div>
-					<div class="timetable-head" th:each="day : ${page.days}" th:text="${day.name}">월</div>
-					<div class="timetable-hours">
-						<div th:each="hour : ${page.hours}" th:text="${hour}">09:00</div>
-					</div>
-					<div class="timetable-day" th:each="day : ${page.days}" th:style="|height: ${page.timetableHeight}px|">
-						<button type="button" class="timetable-block" th:each="block : ${day.blocks}"
-								th:style="|top: ${block.top}px; height: ${block.height}px; left: calc(${block.left}% + 4px); width: calc(${block.width}% - 8px)|"
-								th:attr="data-dialog=|course-${block.course.code}|,aria-label=|${block.course.name} ${block.course.professor} ${block.course.schedule}|">
-							<span class="timetable-block-name" th:text="${block.course.name}">C프로그래밍및실습</span>
-							<span class="timetable-block-professor" th:text="${block.course.professor}">홍길동</span>
-						</button>
-					</div>
+			<div class="legend">
+				<span><span class="swatch has-missing"></span>미제출 있음</span>
+				<span><span class="swatch is-done"></span>모두 제출</span>
+			</div>
+		</div>
+		<div class="timetable-wrap">
+			<div class="timetable" th:style="|grid-template-columns: 64px repeat(${#lists.size(page.days)}, minmax(0, 1fr))|">
+				<div class="timetable-head"></div>
+				<div class="timetable-head" th:each="day : ${page.days}" th:text="${day.name}">월</div>
+				<div class="timetable-hours">
+					<div th:each="hour : ${page.hours}" th:text="${hour}">09:00</div>
+				</div>
+				<div class="timetable-day" th:each="day : ${page.days}" th:style="|height: ${page.timetableHeight}px|">
+					<button type="button" class="timetable-block" th:each="block : ${day.blocks}"
+							th:with="missing=${block.course.unsubmittedCount()}"
+							th:classappend="${missing > 0} ? 'has-missing' : 'is-done'"
+							th:style="|top: ${block.top}px; height: ${block.height}px; left: calc(${block.left}% + 4px); width: calc(${block.width}% - 8px)|"
+							th:attr="data-dialog=|course-${block.course.code}|,aria-label=|${block.course.name} ${block.course.professor} ${block.course.schedule} ${missing > 0 ? '미제출 ' + missing + '명' : '모두 제출'}|">
+						<span class="timetable-block-name" th:text="${block.course.name}">C프로그래밍및실습</span>
+						<span class="timetable-block-professor" th:text="${block.course.professor}">[담당교수]</span>
+						<span class="timetable-block-badge" th:text="${missing > 0} ? |미제출 ${missing}| : '모두 제출'">미제출 7</span>
+					</button>
 				</div>
 			</div>
-			<div th:unless="${#lists.isEmpty(page.unscheduled)}">
-				<p class="muted">강의시간을 읽지 못해 시간표에 넣지 못한 수업</p>
-				<ul class="unscheduled">
-					<li th:each="course : ${page.unscheduled}">
-						<button type="button" class="link" th:attr="data-dialog=|course-${course.code}|"
-								th:text="|${course.name} (${course.code}) ${course.schedule ?: ''}|">과목</button>
-					</li>
-				</ul>
-			</div>
-			<p class="muted small">칸을 누르면 수업 상세와 미제출 학생 명단을 볼 수 있습니다.</p>
 		</div>
+		<div th:unless="${#lists.isEmpty(page.unscheduled)}">
+			<p class="muted">강의시간을 읽지 못해 시간표에 넣지 못한 수업</p>
+			<ul class="unscheduled">
+				<li th:each="course : ${page.unscheduled}">
+					<button type="button" class="link" th:attr="data-dialog=|course-${course.code}|"
+							th:text="|${course.name} (${course.code}) ${course.schedule ?: ''}|">과목</button>
+				</li>
+			</ul>
+		</div>
+		<p class="note plain">
+			<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+				 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<circle cx="12" cy="12" r="10"></circle>
+				<path d="M12 16v-4"></path>
+				<path d="M12 8h.01"></path>
+			</svg>
+			<span>칸을 누르면 수업 상세와 미제출 학생 명단을 볼 수 있습니다.</span>
+		</p>
 	</section>
 </main>
 
 <dialog class="course-detail" th:each="course : ${page.courses}" th:id="|course-${course.code}|"
-		th:attr="aria-label=|${course.name} 상세|">
+		th:attr="aria-labelledby=|course-${course.code}-title|"
+		th:with="missing=${course.unsubmittedCount()},submitted=${course.studentCount - course.unsubmittedCount()}">
 	<div class="course-detail-body">
 		<div class="course-detail-head">
 			<div>
-				<span class="muted small" th:text="|${course.room} · ${course.code}|">센B201 · 000304-001</span>
-				<h3 th:text="${course.name}">공업수학1</h3>
+				<div class="course-detail-meta">
+					<span class="room-chip accent" th:text="${course.room}">센B201</span>
+					<span class="muted small tabular" th:text="${course.code}">000304-001</span>
+				</div>
+				<h2 th:id="|course-${course.code}-title|" th:text="${course.name}">공업수학1</h2>
 			</div>
-			<form method="dialog">
-				<button type="submit" class="icon-button" aria-label="닫기">
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-						 stroke-linecap="round" aria-hidden="true">
-						<path d="M6 6l12 12M18 6L6 18"></path>
-					</svg>
-				</button>
-			</form>
+			<button type="button" class="icon-button" aria-label="닫기" data-dialog-close>
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+					 stroke-linecap="round" aria-hidden="true">
+					<path d="M6 6l12 12M18 6L6 18"></path>
+				</svg>
+			</button>
 		</div>
-		<dl class="course-detail-fields">
-			<dt>강의실</dt>
-			<dd th:text="${course.room}">센B201</dd>
-			<dt>학수번호</dt>
-			<dd class="tabular" th:text="${course.code}">000304-001</dd>
-			<dt>과목명</dt>
-			<dd th:text="${course.name}">공업수학1</dd>
-			<dt>담당교수</dt>
-			<dd th:text="${course.professor}">홍길동</dd>
-			<dt>강의시간</dt>
-			<dd class="tabular" th:text="${course.schedule}">월10:30-12:00</dd>
-			<dt>학생</dt>
-			<dd th:text="|${course.studentCount}명|">19명</dd>
-			<dt>미제출 학생</dt>
-			<dd><span th:classappend="${course.unsubmittedCount() > 0} ? 'unsubmitted' : 'muted'"
-					  th:text="|${course.unsubmittedCount()}명|">7명</span></dd>
-		</dl>
-		<h4>학생 명단</h4>
-		<p class="muted" th:if="${#lists.isEmpty(course.students)}">수강 중인 학생이 없습니다.</p>
-		<div class="student-list" th:unless="${#lists.isEmpty(course.students)}">
-			<div class="student-cols student-list-head">
-				<span>#</span>
-				<span>학번</span>
-				<span>이름</span>
-				<span>동의서</span>
+
+		<div class="submit-progress">
+			<div class="submit-progress-head">
+				<span class="strong">동의서 제출</span>
+				<span class="tabular"><strong class="submit-progress-count" th:text="${submitted}">12</strong>
+					/ <span th:text="|${course.studentCount}명|">19명</span> ·
+					<strong th:classappend="${missing > 0} ? 'accent-text' : 'muted'" th:text="|미제출 ${missing}명|">미제출 7명</strong></span>
 			</div>
-			<div class="student-cols" th:each="student, stat : ${course.students}">
-				<span class="muted tabular" th:text="${stat.count}">1</span>
-				<span class="tabular" th:text="${student.studentId}">20010001</span>
-				<span th:text="${student.name}">홍길동</span>
-				<span><span class="status" th:classappend="${student.submitted} ? 'submitted' : 'missing'"
-							th:text="${student.submitted} ? '제출' : '미제출'">미제출</span></span>
+			<div class="rate-bar ok" role="progressbar" aria-label="제출 진행률" aria-valuemin="0"
+				 th:attr="aria-valuemax=${course.studentCount},aria-valuenow=${submitted}">
+				<span th:style="|width: ${course.studentCount == 0 ? 0 : submitted * 100 / course.studentCount}%|"></span>
 			</div>
 		</div>
 
+		<dl class="course-detail-fields">
+			<dt>과목명</dt>
+			<dd class="strong" th:text="${course.name}">공업수학1</dd>
+			<dt>담당교수</dt>
+			<dd th:text="${course.professor}">[담당교수]</dd>
+			<dt>강의시간</dt>
+			<dd class="tabular" th:text="${course.schedule}">월10:30-12:00</dd>
+			<dt>강의실</dt>
+			<dd th:text="${course.room}">센B201</dd>
+		</dl>
+
+		<section class="student-section">
+			<div class="student-section-head">
+				<h3>학생 명단</h3>
+				<div class="segmented small" role="group" aria-label="명단 필터"
+					 th:unless="${#lists.isEmpty(course.students)}">
+					<button type="button" aria-pressed="true" data-student-filter="all"
+							th:text="|전체 ${#lists.size(course.students)}|">전체 19</button>
+					<button type="button" aria-pressed="false" data-student-filter="missing"
+							th:text="|미제출 ${missing}|">미제출 7</button>
+				</div>
+			</div>
+			<p class="muted" th:if="${#lists.isEmpty(course.students)}">수강 중인 학생이 없습니다.</p>
+			<div class="student-list" th:unless="${#lists.isEmpty(course.students)}">
+				<div class="student-cols student-list-head">
+					<span>#</span>
+					<span>학번</span>
+					<span>이름</span>
+					<span>동의서</span>
+				</div>
+				<div class="student-cols" th:each="student, stat : ${course.students}"
+					 th:attr="data-submitted=${student.submitted}">
+					<span class="muted tabular" th:text="${stat.count}">1</span>
+					<span class="tabular" th:text="${student.studentId}">20990001</span>
+					<span th:text="${student.name}">[이름]</span>
+					<span><span class="status" th:classappend="${student.submitted} ? 'submitted' : 'missing'"
+								th:text="${student.submitted} ? '제출' : '미제출'">미제출</span></span>
+				</div>
+				<p class="student-empty muted" hidden>미제출 학생이 없습니다.</p>
+			</div>
+		</section>
+
 		<details class="danger-zone">
-			<summary>과목 삭제</summary>
-			<p th:text="|이 과목과 수강 ${course.enrollmentCount}건, 받은 동의서 ${course.consentCount}건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.|">
-				이 과목과 수강 19건, 받은 동의서 12건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.
-			</p>
-			<p class="muted small">폐강 등으로 명부에서 빠진 과목을 정리할 때 쓰세요. 이 과목이 든 명부를 다시 올리거나, 학생 시간표(SJPT)에 이 과목이 남아 있으면 다시 생깁니다.</p>
-			<form method="post" th:action="@{/admin/semesters/{id}/courses/delete(id=${semester.id})}">
-				<input type="hidden" name="code" th:value="${course.code}">
-				<input type="hidden" name="consentCount" th:value="${course.consentCount}">
-				<input type="hidden" name="view" th:value="${timetable} ? 'timetable' : 'list'">
-				<input type="hidden" name="room" th:value="${page.room}">
-				<label><span>확인을 위해 학수번호 <strong th:text="${course.code}">000304-001</strong>을(를) 입력하세요</span>
-					<input type="text" name="confirmCode" autocomplete="off" required>
-				</label>
-				<button type="submit" class="danger">과목 삭제</button>
-			</form>
+			<summary>
+				<span class="danger-zone-title">
+					<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+						 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M3 6h18"></path>
+						<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+						<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+					</svg>
+					<span>과목 삭제</span>
+				</span>
+				<svg class="chevron" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none"
+					 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="m6 9 6 6 6-6"></path>
+				</svg>
+			</summary>
+			<div class="danger-zone-body">
+				<p th:text="|이 과목과 수강 ${course.enrollmentCount}건, 받은 동의서 ${course.consentCount}건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.|">
+					이 과목과 수강 19건, 받은 동의서 12건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.
+				</p>
+				<p class="muted small">폐강 등으로 명부에서 빠진 과목을 정리할 때 쓰세요. 이 과목이 든 명부를 다시 올리거나, 학생 시간표(SJPT)에 이 과목이 남아 있으면 다시 생깁니다.</p>
+				<form method="post" th:action="@{/admin/semesters/{id}/courses/delete(id=${semester.id})}" data-confirm-form>
+					<input type="hidden" name="code" th:value="${course.code}">
+					<input type="hidden" name="consentCount" th:value="${course.consentCount}">
+					<input type="hidden" name="view" th:value="${timetable} ? 'timetable' : 'list'">
+					<input type="hidden" name="room" th:value="${page.room}">
+					<label class="field"><span>확인을 위해 학수번호 <strong class="code-chip" th:text="${course.code}">000304-001</strong>을(를) 입력하세요</span>
+						<span class="confirm-input">
+							<input type="text" name="confirmCode" autocomplete="off" required class="tabular"
+								   th:attr="data-expected=${course.code}">
+							<svg class="confirm-check" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"
+								 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M20 6 9 17l-5-5"></path>
+							</svg>
+						</span>
+					</label>
+					<button type="submit" class="button danger block" disabled data-busy-label="삭제 중…">과목 삭제</button>
+				</form>
+			</div>
 		</details>
 	</div>
 </dialog>
+<script th:src="@{/js/admin-dialogs.js}"></script>
 <script th:src="@{/js/admin-semester.js}"></script>
 </body>
 </html>

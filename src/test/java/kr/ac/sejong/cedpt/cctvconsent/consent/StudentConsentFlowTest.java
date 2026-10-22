@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -208,12 +209,16 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 		long first = enrollmentId(STUDENT, "000304-001");
 		long second = enrollmentId(STUDENT, "000305-001");
 
-		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+		MvcResult done = mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
 						.param("enrollmentIds", String.valueOf(first), String.valueOf(second))
 						.param("agreed", "true")
 						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
-				.andExpect(redirectedUrl("/consents"))
-				.andExpect(flash().attribute("submitted", 2));
+				.andExpect(redirectedUrl("/consents/complete"))
+				.andReturn();
+		mvc.perform(get("/consents/complete").with(student(STUDENT))
+						.session((MockHttpSession) done.getRequest().getSession()))
+				.andExpect(content().string(Matchers.containsString("과목000304-001")))
+				.andExpect(content().string(Matchers.containsString("과목000305-001")));
 
 		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isEqualTo(2);
 		assertThat(jdbc.queryForObject("select count(*) from consent_document", Integer.class)).isEqualTo(2);
@@ -255,7 +260,7 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 						.param("enrollmentIds", String.valueOf(enrollmentId))
 						.param("agreed", "true")
 						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
-				.andExpect(redirectedUrl("/consents"));
+				.andExpect(redirectedUrl("/consents/complete"));
 
 		assertThat(jdbc.queryForObject("select language from consent", String.class)).isEqualTo("EN");
 		byte[] pdf = mvc.perform(get("/consents/" + enrollmentId + "/pdf").with(student(STUDENT)))
@@ -312,9 +317,12 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 
 	@Test
 	void landingOffersLanguageChoice() throws Exception {
+		// 스크립트 없이도 고른 언어로 로그인 화면(/login?lang=en)으로 가는 GET 폼
 		mvc.perform(get("/"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(Matchers.containsString("/login?lang=en")));
+				.andExpect(content().string(Matchers.containsString("action=\"/login\" method=\"get\"")))
+				.andExpect(content().string(Matchers.containsString("name=\"lang\" value=\"en\"")))
+				.andExpect(content().string(Matchers.containsString("data-cta-en=\"Continue\"")));
 		mvc.perform(get("/login").param("lang", "en"))
 				.andExpect(content().string(Matchers.containsString("Sejong portal password")));
 	}
@@ -322,6 +330,97 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	@Test
 	void consentPagesRequireStudentLogin() throws Exception {
 		mvc.perform(get("/consents")).andExpect(redirectedUrl("/login"));
+	}
+
+	@Test
+	void showsOwnSignatureOnly() throws Exception {
+		long mine = enrollmentId(STUDENT, "000304-001");
+		submit(STUDENT, mine);
+
+		byte[] png = mvc.perform(get("/consents/" + mine + "/signature").with(student(STUDENT)))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType("image/png"))
+				.andExpect(header().string("Cache-Control", Matchers.containsString("no-store")))
+				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
+				.andReturn().getResponse().getContentAsByteArray();
+		assertThat(png).startsWith(0x89, 'P', 'N', 'G');
+
+		// 같은 수업을 듣는 다른 학생도 남의 서명은 볼 수 없다. 아직 제출하지 않은 자기 수강도 없다
+		mvc.perform(get("/consents/" + mine + "/signature").with(student(OTHER))).andExpect(status().isNotFound());
+		mvc.perform(get("/consents/" + enrollmentId(OTHER, "000304-001") + "/signature").with(student(OTHER)))
+				.andExpect(status().isNotFound());
+		mvc.perform(get("/consents/" + mine + "/signature")).andExpect(redirectedUrl("/login"));
+	}
+
+	@Test
+	void signFormPreselectsChosenCourse() throws Exception {
+		long first = enrollmentId(STUDENT, "000304-001");
+		long second = enrollmentId(STUDENT, "000305-001");
+
+		mvc.perform(get("/consents/sign").param("enrollmentId", String.valueOf(second)).with(student(STUDENT)))
+				.andExpect(status().isOk())
+				.andExpect(content().string(checkedCourse(second)))
+				.andExpect(content().string(Matchers.not(checkedCourse(first))));
+
+		// 남의 수강이면 무시하고 모든 수업을 골라 둔다
+		long others = enrollmentId(OTHER, "000304-001");
+		mvc.perform(get("/consents/sign").param("enrollmentId", String.valueOf(others)).with(student(STUDENT)))
+				.andExpect(status().isOk())
+				.andExpect(content().string(checkedCourse(first)))
+				.andExpect(content().string(checkedCourse(second)))
+				.andExpect(content().string(Matchers.not(Matchers.containsString("value=\"" + others + "\""))));
+	}
+
+	/** 그 수강의 체크박스가 체크된 채로 그려졌는지. */
+	private static org.hamcrest.Matcher<String> checkedCourse(long enrollmentId) {
+		return Matchers.matchesPattern("(?s).*<input [^>]*value=\"" + enrollmentId + "\"[^>]*checked=\"checked\".*");
+	}
+
+	@Test
+	void showsCompletionPageOnlyAfterSubmit() throws Exception {
+		// 제출한 적이 없으면 내 수업으로
+		mvc.perform(get("/consents/complete").with(student(STUDENT))).andExpect(redirectedUrl("/consents"));
+
+		MockHttpSession session = new MockHttpSession();
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf()).session(session)
+						.param("enrollmentIds", String.valueOf(enrollmentId(STUDENT, "000304-001")))
+						.param("agreed", "true")
+						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
+				.andExpect(redirectedUrl("/consents/complete"));
+		// 새로 고치거나 언어를 바꿔 다시 열어도 보인다
+		for (String lang : List.of("ko", "en")) {
+			mvc.perform(get("/consents/complete").param("lang", lang).with(student(STUDENT)).session(session))
+					.andExpect(status().isOk())
+					.andExpect(content().string(Matchers.containsString("과목000304-001")));
+		}
+		// 내 수업으로 가면 지운다
+		mvc.perform(get("/consents").with(student(STUDENT)).session(session)).andExpect(status().isOk());
+		mvc.perform(get("/consents/complete").with(student(STUDENT)).session(session))
+				.andExpect(redirectedUrl("/consents"));
+	}
+
+	@Test
+	void keepsChosenCoursesWhenSubmitIsRejected() throws Exception {
+		long first = enrollmentId(STUDENT, "000304-001");
+		long second = enrollmentId(STUDENT, "000305-001");
+
+		MvcResult rejected = mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+						.param("enrollmentIds", String.valueOf(second))
+						.param("agreed", "true")
+						.param("signature", "data:image/png;base64,AAAA"))
+				.andExpect(redirectedUrl("/consents/sign"))
+				.andReturn();
+		mvc.perform(get("/consents/sign").with(student(STUDENT)).flashAttrs(rejected.getFlashMap()))
+				.andExpect(content().string(checkedCourse(second)))
+				.andExpect(content().string(Matchers.not(checkedCourse(first))));
+	}
+
+	private void submit(String studentId, long enrollmentId) throws Exception {
+		mvc.perform(post("/consents/sign").with(student(studentId)).with(csrf())
+						.param("enrollmentIds", String.valueOf(enrollmentId))
+						.param("agreed", "true")
+						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
+				.andExpect(redirectedUrl("/consents/complete"));
 	}
 
 	private MockHttpSession login(String studentId) throws Exception {

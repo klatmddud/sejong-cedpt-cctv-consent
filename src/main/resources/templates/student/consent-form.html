@@ -3,80 +3,149 @@
 <head th:replace="~{student/fragments :: head('sign.title')}"></head>
 <body>
 <header th:replace="~{student/fragments :: nav(${student})}"></header>
-<main class="page">
+<!--/* preselected: "지금 작성하기"로 고른 수업이나 제출이 거절되기 전에 골랐던 수업. 없으면(null) 모든 수업을 골라 둔다 */-->
+<main class="page wide" th:with="total=${#lists.size(courses)}, selected=${preselected != null ? #lists.size(preselected) : total}">
 	<a class="back-link" th:href="@{/consents}">
 		<svg class="icon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
 		<span th:text="#{courses.title}">내 수업</span>
 	</a>
-	<h1 class="visually-hidden" th:text="#{sign.title}">동의서 작성</h1>
-
-	<ol class="steps" th:attr="aria-label=#{steps.label}">
-		<li id="step-read" aria-current="step" th:text="#{steps.read}">1 동의서 확인</li>
-		<li id="step-courses" th:text="#{steps.courses}">2 수업 선택</li>
-		<li id="step-sign" th:text="#{steps.sign}">3 서명</li>
-	</ol>
+	<div class="page-head">
+		<h1 th:text="#{sign.title}">동의서 작성</h1>
+		<p class="muted" th:text="|${courses[0].semester} · #{sign.lead}|">2026-2학기 · 실습실 CCTV 촬영 및 이용 동의</p>
+	</div>
 
 	<div class="alert error" role="alert" th:if="${error}">
 		<svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
 		<span th:text="${error}">서명을 입력하세요.</span>
 	</div>
 
-	<form id="consent-form" th:action="@{/consents/sign}" method="post">
+	<!--/* 단계 표시: 끝낸 단계는 done, 지금 할 단계는 aria-current(consent-form.js) */-->
+	<nav class="steps" th:attr="aria-label=#{steps.label}">
+		<ol>
+			<li>
+				<a class="step" href="#sign-read" data-step="read" aria-current="step">
+					<span class="step-dot" aria-hidden="true"><span class="step-num">1</span><svg class="icon step-check" width="16" height="16" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span>
+					<span class="step-label" th:text="#{steps.read}">동의서 확인</span>
+					<span class="visually-hidden step-state" th:data-done="#{sign.stepDone}"></span>
+				</a>
+			</li>
+			<li>
+				<a class="step done" href="#sign-courses" data-step="courses">
+					<span class="step-dot" aria-hidden="true"><span class="step-num">2</span><svg class="icon step-check" width="16" height="16" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span>
+					<span class="step-label" th:text="#{steps.courses}">수업 선택</span>
+					<span class="visually-hidden step-state" th:data-done="#{sign.stepDone}" th:text="#{sign.stepDone}">완료</span>
+				</a>
+			</li>
+			<li>
+				<a class="step" href="#sign-signature" data-step="sign">
+					<span class="step-dot" aria-hidden="true"><span class="step-num">3</span><svg class="icon step-check" width="16" height="16" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span>
+					<span class="step-label" th:text="#{steps.sign}">서명</span>
+					<span class="visually-hidden step-state" th:data-done="#{sign.stepDone}"></span>
+				</a>
+			</li>
+		</ol>
+		<div class="step-progress" id="step-progress" role="progressbar" aria-valuemin="0" aria-valuemax="3" aria-valuenow="1"
+			 th:attr="aria-label=#{steps.progress}">
+			<span style="width: 33%"></span>
+		</div>
+	</nav>
+
+	<form id="consent-form" class="columns" th:action="@{/consents/sign}" method="post">
 		<input type="hidden" name="signature" id="signature">
-		<div class="page" style="padding: 0">
-			<section class="card" aria-labelledby="section-read">
-				<h2 id="section-read" th:text="#{sign.section.read}">1. 동의서 확인</h2>
-				<div th:replace="~{student/fragments :: summary}"></div>
+		<div class="column-main">
+			<section class="card step-card" id="sign-read" aria-labelledby="section-read">
+				<div class="card-head">
+					<h2 id="section-read"><span class="step-badge" aria-hidden="true">1</span><span th:text="#{steps.read}">동의서 확인</span></h2>
+					<span class="pill done" id="agree-done" hidden th:text="#{sign.stepDone}">완료</span>
+				</div>
+				<div th:replace="~{student/fragments :: consentSummary}"></div>
 				<label class="agree">
 					<input type="checkbox" name="agreed" value="true" id="agreed" required>
 					<span th:text="#{sign.agree}">개인 영상정보의 수집·이용·제공에 동의합니다.</span>
 				</label>
 			</section>
 
-			<section class="card" aria-labelledby="section-courses">
+			<section class="card step-card" id="sign-courses" aria-labelledby="section-courses">
 				<div class="card-head">
-					<h2 id="section-courses" th:text="#{sign.section.courses}">2. 동의할 수업</h2>
+					<h2 id="section-courses"><span class="step-badge" aria-hidden="true">2</span><span th:text="#{sign.courses}">동의할 수업</span></h2>
 					<label class="select-all">
-						<input type="checkbox" id="select-all" checked>
-						<span><span th:text="#{sign.selectAll}">전체 선택</span> (<span id="selected-count" th:text="${#lists.size(courses)}">3</span>)</span>
+						<input type="checkbox" id="select-all" th:checked="${selected == total}">
+						<span th:text="#{sign.selectAll}">전체 선택</span>
 					</label>
 				</div>
-				<p class="muted small" th:text="#{sign.courses.hint}">서명 한 번으로 선택한 수업마다 동의서가 제출됩니다.</p>
+				<p class="muted small tabular" id="selected-count" aria-live="polite"
+				   th:data-template="#{sign.selectedCount('{n}', ${total})}"
+				   th:text="#{sign.selectedCount(${selected}, ${total})}">3/3개 선택됨</p>
 				<fieldset class="course-options">
 					<legend class="visually-hidden" th:text="#{sign.courses}">동의할 수업</legend>
 					<label class="course-option" th:each="course : ${courses}">
-						<input class="visually-hidden" type="checkbox" name="enrollmentIds" th:value="${course.enrollmentId}" checked
-							   th:attr="aria-label=#{sign.select.course(${course.courseName})}">
-						<svg class="icon check" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path class="tick" d="m9 12 2 2 4-4"/></svg>
-						<strong class="course-name" th:text="${course.courseName}">공업수학1</strong>
-						<span class="course-meta">
-							<span class="pill" th:text="${course.room}">센B201</span>
-							<span class="muted" th:text="|${course.semester} · ${course.courseCode}|">2026-2학기 · 000304-001</span>
+						<span class="course-info">
+							<strong class="course-name" th:text="${course.courseName}">공업수학1</strong>
+							<span class="course-meta">
+								<span class="pill" th:text="${course.room}">센B201</span>
+								<span class="muted" th:text="|${course.semester} · ${course.courseCode}|">2026-2학기 · 000304-001</span>
+							</span>
 						</span>
+						<input type="checkbox" name="enrollmentIds" th:value="${course.enrollmentId}" th:checked="${preselected == null or #lists.contains(preselected, course.enrollmentId)}"
+							   th:data-name="${course.courseName}" th:data-room="${course.room}">
 					</label>
 				</fieldset>
+				<p class="field-error" id="courses-error" role="alert" hidden>
+					<svg class="icon" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+					<span th:text="#{consent.error.noCourse}">동의할 수업을 하나 이상 선택하세요.</span>
+				</p>
 			</section>
+		</div>
 
-			<section class="card" aria-labelledby="signature-label">
+		<div class="column-side">
+			<section class="card step-card" id="sign-signature" aria-labelledby="signature-label">
 				<div class="card-head">
-					<h2 id="signature-label" th:text="#{sign.section.sign}">3. 서명</h2>
-					<button type="button" class="text-button" id="signature-clear" th:text="#{sign.clear}">다시 쓰기</button>
+					<h2 id="signature-label"><span class="step-badge" aria-hidden="true">3</span><span th:text="#{sign.signature}">서명</span></h2>
+					<button type="button" class="text-button" id="signature-clear" aria-disabled="true">
+						<svg class="icon" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+						<span th:text="#{sign.clear}">다시 쓰기</span>
+					</button>
 				</div>
-				<canvas id="signature-pad" class="signature-pad" role="img" aria-labelledby="signature-label"></canvas>
+				<div class="signature-box" id="signature-box">
+					<span class="signature-line" aria-hidden="true">×</span>
+					<canvas id="signature-pad" class="signature-pad" role="img" th:attr="aria-label=#{sign.pad.label}"></canvas>
+					<span class="signature-hint" aria-hidden="true">
+						<svg class="icon" width="22" height="22" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.86.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.86z"/></svg>
+						<span th:text="#{sign.pad.hint}">여기에 서명하세요</span>
+					</span>
+				</div>
 				<p class="field-error" id="signature-error" hidden th:text="#{sign.signature.required}">네모 칸 안에 서명하세요.</p>
-				<p class="signer" th:text="#{sign.signer(${student.name})}">동의인: 홍길동</p>
+				<p class="signer"><span th:text="#{sign.signer}">동의인</span> <strong th:text="${student.name}">[이름]</strong></p>
 			</section>
 		</div>
 	</form>
 </main>
-<footer class="submit-bar">
+<footer class="submit-bar" th:with="total=${#lists.size(courses)}, selected=${preselected != null ? #lists.size(preselected) : total},
+		readLabel=#{steps.read}, signLabel=#{steps.sign}">
 	<div>
-		<button type="submit" form="consent-form" class="button" id="submit-button"
-				th:attr="data-template=#{sign.submitCount('{n}')}"
-				th:text="#{sign.submitCount(${#lists.size(courses)})}">3개 수업 동의서 제출</button>
-		<p class="muted small" th:text="#{sign.note}">제출한 동의서는 수정할 수 없습니다.</p>
+		<p class="submit-status" id="submit-status" role="status"
+		   th:data-remaining="#{sign.remaining('{steps}')}" th:data-ready="#{sign.ready}">
+			<svg class="icon ready-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+			<span id="submit-status-text" th:text="#{sign.remaining(${readLabel + ' · ' + signLabel})}">남은 단계: 동의서 확인 · 서명</span>
+		</p>
+		<button type="submit" form="consent-form" class="button" id="submit-button" disabled
+				th:data-template="#{sign.submitCount('{n}')}" th:data-empty="#{sign.submit}"
+				th:text="#{sign.submitCount(${selected})}">3개 수업 동의서 제출</button>
 	</div>
 </footer>
+
+<dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-note">
+	<h2 id="confirm-title" th:data-template="#{sign.confirm.title('{n}')}">3개 수업 동의서를 제출할까요?</h2>
+	<p class="muted" id="confirm-note" th:text="#{sign.note}">제출한 동의서는 수정할 수 없습니다.</p>
+	<ul class="confirm-list" id="confirm-list"></ul>
+	<div class="dialog-actions">
+		<button type="button" class="button secondary" id="confirm-cancel" autofocus th:text="#{sign.confirm.cancel}">취소</button>
+		<button type="submit" form="consent-form" class="button" id="confirm-submit" th:data-busy-label="#{sign.confirm.busy}">
+			<span th:text="#{sign.confirm.submit}">제출하기</span>
+		</button>
+	</div>
+</dialog>
+<script th:src="@{/js/student-nav.js}"></script>
 <script th:src="@{/js/signature-pad.js}"></script>
 <script th:src="@{/js/consent-form.js}"></script>
 </body>

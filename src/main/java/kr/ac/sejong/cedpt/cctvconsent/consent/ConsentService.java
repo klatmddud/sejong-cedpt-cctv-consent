@@ -25,7 +25,8 @@ public class ConsentService {
 	private static final int MAX_COURSES_PER_SUBMIT = 30;
 
 	public record CourseConsent(long enrollmentId, String semester, String courseCode, String courseName,
-			String professor, String schedule, String room, OffsetDateTime signedAt, ConsentLanguage language) {
+			String professor, String schedule, String room, OffsetDateTime signedAt, ConsentLanguage language,
+			String signerName) {
 
 		public boolean signed() {
 			return signedAt != null;
@@ -79,7 +80,10 @@ public class ConsentService {
 		if (ids.size() > MAX_COURSES_PER_SUBMIT) {
 			throw new ConsentException("consent.error.noCourse");
 		}
-		List<Enrollment> selected = ids.stream().map(id -> openEnrollment(studentId, id)).toList();
+		List<Enrollment> selected = enrollments.lockOpenByIds(ids, studentId, today());
+		if (selected.size() != ids.size()) {
+			throw new NotFoundException();
+		}
 		if (!consents.findByEnrollmentIn(selected).isEmpty()) {
 			throw new ConsentException("consent.error.already");
 		}
@@ -112,6 +116,14 @@ public class ConsentService {
 		return new PdfFile("CCTV동의서_" + enrollment.getCourse().getName() + ".pdf", pdf);
 	}
 
+	/** 제출한 동의서의 서명 이미지(PNG). 접근 조건은 pdf와 같다. */
+	@Transactional(readOnly = true)
+	public byte[] signature(String studentId, long enrollmentId) {
+		Consent consent = consents.findByEnrollment(openEnrollment(studentId, enrollmentId))
+				.orElseThrow(NotFoundException::new);
+		return documents.findSignaturePng(consent.getId()).orElseThrow(NotFoundException::new);
+	}
+
 	private Enrollment openEnrollment(String studentId, long enrollmentId) {
 		return enrollments.findOpenById(enrollmentId, studentId, today()).orElseThrow(NotFoundException::new);
 	}
@@ -121,7 +133,8 @@ public class ConsentService {
 		return new CourseConsent(enrollment.getId(),
 				course.getSemester().getYear() + "-" + course.getSemester().getTerm() + "학기",
 				course.getCode(), course.getName(), course.getProfessor(), course.getSchedule(), course.getRoom(),
-				consent == null ? null : consent.getSignedAt(), consent == null ? null : consent.getLanguage());
+				consent == null ? null : consent.getSignedAt(), consent == null ? null : consent.getLanguage(),
+				consent == null ? null : consent.getSignerName());
 	}
 
 	private static LocalDate today() {

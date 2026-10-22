@@ -44,7 +44,13 @@ public class RosterQueryService {
 
 	}
 
-	public record StudentSummary(String studentId, String name, boolean submitted) {
+	/** @param inSjpt 학생 로그인(sjpt) 시간표에서 확인된 수강. 학생이 이번 학기에 로그인했다는 뜻이다 */
+	public record StudentSummary(String studentId, String name, boolean submitted, boolean inSjpt) {
+	}
+
+	/** 명부에 없고 학생 로그인(sjpt)으로만 확인된 수강 */
+	public record SjptOnlyEnrollment(String studentId, String studentName, String courseName, String code,
+			String professor, String room, String schedule) {
 	}
 
 	public record UploadSummary(String semester, String fileName, OffsetDateTime uploadedAt, int courseCount,
@@ -74,14 +80,19 @@ public class RosterQueryService {
 		return semesters.findById(id).map(this::summarize);
 	}
 
+	/** 학기가 없으면(방금 초기화, 파기된 경우) 비어 있다. */
 	public List<CourseSummary> courses(long semesterId) {
-		Semester semester = semesters.findById(semesterId).orElseThrow();
+		Semester semester = semesters.findById(semesterId).orElse(null);
+		if (semester == null) {
+			return List.of();
+		}
 		Map<Long, Long> counts = enrollments.countActiveByCourse(semester).stream()
 				.collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
 		Map<Long, List<StudentSummary>> students = enrollments.findActiveStudents(semesterId).stream()
 				.collect(Collectors.groupingBy(row -> ((Number) row[0]).longValue(),
 						Collectors.mapping(
-								row -> new StudentSummary((String) row[1], (String) row[2], (Boolean) row[3]),
+								row -> new StudentSummary((String) row[1], (String) row[2], (Boolean) row[3],
+										(Boolean) row[4]),
 								Collectors.toList())));
 		Map<Long, Object[]> all = enrollments.countAllByCourse(semesterId).stream()
 				.collect(Collectors.toMap(row -> ((Number) row[0]).longValue(), Function.identity()));
@@ -99,6 +110,19 @@ public class RosterQueryService {
 		return row == null ? 0 : ((Number) row[column]).longValue();
 	}
 
+	/** 명부 없이 학생 로그인(sjpt)으로만 확인된 수강 중인 수강, 강의실, 학수번호, 학번 순 */
+	public List<SjptOnlyEnrollment> sjptOnlyEnrollments(long semesterId) {
+		return enrollments.findSjptOnly(semesterId).stream()
+				.map(row -> new SjptOnlyEnrollment((String) row[0], (String) row[1], (String) row[2], (String) row[3],
+						(String) row[4], (String) row[5], (String) row[6]))
+				.toList();
+	}
+
+	/** 이 학기에 마지막으로 명부를 반영한 시각. 올린 적이 없으면 비어 있다. */
+	public Optional<OffsetDateTime> lastRosterUploadAt(long semesterId) {
+		return uploads.findTopBySemesterIdOrderByIdDesc(semesterId).map(RosterUpload::getUploadedAt);
+	}
+
 	public List<UploadSummary> recentUploads() {
 		return uploads.findTop10ByOrderByUploadedAtDesc().stream()
 				.map(upload -> new UploadSummary(
@@ -111,7 +135,7 @@ public class RosterQueryService {
 
 	private SemesterSummary summarize(Semester semester) {
 		return new SemesterSummary(semester.getId(), semester.getYear(), semester.getTerm(), semester.getEndsOn(),
-				semester.getPurgeOn(), courses.findBySemester(semester).size(),
+				semester.getPurgeOn(), (int) courses.countBySemester(semester),
 				enrollments.countActiveBySemester(semester));
 	}
 

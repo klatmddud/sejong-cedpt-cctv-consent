@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{student/fragments :: head('sign.complete.title')}"></head>
+<body>
+<header th:replace="~{student/fragments :: nav(${student})}"></header>
+<!--/* 제출한 뒤 보이는 화면(세션에 둔 submittedCourses, submittedSemester). 내 수업으로 가면 지운다 */-->
+<main class="page narrow">
+	<section class="card complete-card">
+		<span class="complete-icon" aria-hidden="true">
+			<svg class="icon" width="38" height="38" viewBox="0 0 24 24" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+		</span>
+		<div class="page-head">
+			<h1 th:text="#{sign.complete.title}">동의서를 제출했습니다</h1>
+			<p class="muted" th:text="#{sign.complete.meta(${submittedSemester}, ${#lists.size(submittedCourses)})}">2026-2학기 · 2개 수업</p>
+		</div>
+		<ul class="confirm-list">
+			<li th:each="name : ${submittedCourses}">
+				<strong th:text="${name}">공업수학1</strong>
+				<span class="pill done" th:text="#{courses.done}">제출 완료</span>
+			</li>
+		</ul>
+		<a class="button" th:href="@{/consents}" th:text="#{sign.complete.back}">내 수업으로</a>
+	</section>
+</main>
+<script th:src="@{/js/student-nav.js}"></script>
+</body>
+</html>

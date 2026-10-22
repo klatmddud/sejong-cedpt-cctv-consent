@@ -36,6 +36,11 @@ public class TargetRooms {
 	public record Room(String id, String label) {
 	}
 
+	/** 대상 강의실 목록(예: "B201"). 화면에 보여 줄 수 있게 정렬한다. */
+	public List<String> ids() {
+		return rooms.stream().sorted().toList();
+	}
+
 	public boolean includes(String roomLabel) {
 		return !matching(roomLabel).isEmpty();
 	}

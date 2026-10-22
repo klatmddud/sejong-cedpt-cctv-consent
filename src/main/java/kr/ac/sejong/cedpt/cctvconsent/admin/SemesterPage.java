@@ -49,24 +49,7 @@ record SemesterPage(List<CourseSummary> courses, List<RoomGroup> groups, int uns
 	 */
 	static SemesterPage of(List<CourseSummary> courses, String requestedRoom,
 			Function<String, List<TargetRooms.Room>> targetRooms) {
-		// 같은 강의실이 "센B201", "B201"처럼 다르게 적혀도 한 묶음이 되도록 강의실 id로 묶는다
-		Map<String, List<CourseSummary>> byRoom = new TreeMap<>();
-		Map<String, String> labels = new TreeMap<>();
-		for (CourseSummary course : courses) {
-			List<TargetRooms.Room> rooms = targetRooms.apply(course.room());
-			for (TargetRooms.Room room : rooms.isEmpty() ? List.of(new TargetRooms.Room(course.room(), course.room()))
-					: rooms) {
-				byRoom.computeIfAbsent(room.id(), key -> new ArrayList<>()).add(course);
-				// 건물 약자가 붙은 표기("센B201")를 화면에 쓴다
-				labels.merge(room.id(), room.label(), (a, b) -> b.length() > a.length() ? b : a);
-			}
-		}
-		byRoom.values().forEach(list -> list.sort(Comparator.comparing(CourseSummary::code)));
-		List<RoomGroup> groups = byRoom.entrySet().stream()
-				.map(entry -> new RoomGroup(labels.get(entry.getKey()), entry.getValue(),
-						entry.getValue().stream().mapToLong(CourseSummary::studentCount).sum(),
-						entry.getValue().stream().mapToInt(CourseSummary::unsubmittedCount).sum()))
-				.toList();
+		List<RoomGroup> groups = groupByRoom(courses, targetRooms);
 		// 여러 강의실 수업이 두 번 세이지 않도록 과목 기준으로 센다
 		int unsubmitted = courses.stream().mapToInt(CourseSummary::unsubmittedCount).sum();
 		RoomGroup chosen = groups.stream().filter(group -> group.room().equals(requestedRoom)).findFirst()
@@ -105,6 +88,29 @@ record SemesterPage(List<CourseSummary> courses, List<RoomGroup> groups, int uns
 		List<CourseSummary> unscheduled = inRoom.stream().filter(course -> course.times().isEmpty()).toList();
 		return new SemesterPage(courses, groups, unsubmitted, room, hours, days,
 				px((endHour - startHour) * 60), unscheduled);
+	}
+
+	/** 강의실별 묶음, 강의실 순. 여러 강의실 수업은 강의실마다 들어간다. 묶음 안은 학수번호 순. */
+	static List<RoomGroup> groupByRoom(List<CourseSummary> courses,
+			Function<String, List<TargetRooms.Room>> targetRooms) {
+		// 같은 강의실이 "센B201", "B201"처럼 다르게 적혀도 한 묶음이 되도록 강의실 id로 묶는다
+		Map<String, List<CourseSummary>> byRoom = new TreeMap<>();
+		Map<String, String> labels = new TreeMap<>();
+		for (CourseSummary course : courses) {
+			List<TargetRooms.Room> rooms = targetRooms.apply(course.room());
+			for (TargetRooms.Room room : rooms.isEmpty() ? List.of(new TargetRooms.Room(course.room(), course.room()))
+					: rooms) {
+				byRoom.computeIfAbsent(room.id(), key -> new ArrayList<>()).add(course);
+				// 건물 약자가 붙은 표기("센B201")를 화면에 쓴다
+				labels.merge(room.id(), room.label(), (a, b) -> b.length() > a.length() ? b : a);
+			}
+		}
+		byRoom.values().forEach(list -> list.sort(Comparator.comparing(CourseSummary::code)));
+		return byRoom.entrySet().stream()
+				.map(entry -> new RoomGroup(labels.get(entry.getKey()), entry.getValue(),
+						entry.getValue().stream().mapToLong(CourseSummary::studentCount).sum(),
+						entry.getValue().stream().mapToInt(CourseSummary::unsubmittedCount).sum()))
+				.toList();
 	}
 
 	private record Slot(CourseSummary course, CourseTime time) {

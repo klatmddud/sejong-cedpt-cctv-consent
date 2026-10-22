@@ -4,6 +4,183 @@
 <body>
 <header th:replace="~{admin/fragments :: nav('dashboard')}"></header>
 <main class="page">
+	<div class="page-head">
+		<div class="page-title">
+			<span class="eyebrow">학기 현황</span>
+			<h1 th:text="${dashboard} ? |${dashboard.semester.label()} 동의서 현황| : '학기 현황'">2026-2학기 동의서 현황</h1>
+			<p class="muted tabular" th:if="${dashboard}" th:object="${dashboard.semester}"
+			   th:text="|수업 *{courseCount}개 · 동의 대상 *{enrollmentCount}건 · 동의서 파기 예정일 *{purgeOn}|">
+				수업 56개 · 동의 대상 1789건 · 동의서 파기 예정일 2027-12-31
+			</p>
+		</div>
+		<div class="page-actions">
+			<a class="button outline" th:href="@{/admin/roster}">
+				<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+					 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+					<path d="m17 8-5-5-5 5"></path>
+					<path d="M12 3v12"></path>
+				</svg>
+				<span>명부 업로드</span>
+			</a>
+			<a class="button primary" th:if="${dashboard}" th:href="@{/admin/semesters/{id}(id=${dashboard.semester.id})}">
+				<span>동의서 관리</span>
+				<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+					 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M5 12h14"></path>
+					<path d="m12 5 7 7-7 7"></path>
+				</svg>
+			</a>
+		</div>
+	</div>
+
+	<p class="alert ok" th:if="${notice}" th:text="${notice}">2026-2학기를 초기화했습니다.</p>
+	<p class="alert error" th:if="${error}" th:text="${error}">입력한 문구가 다릅니다.</p>
+
+	<th:block th:if="${dashboard}" th:object="${dashboard}">
+		<div class="stat-cards">
+			<section class="stat-card">
+				<div class="ring">
+					<svg role="img" width="104" height="104" viewBox="0 0 104 104" fill="none"
+						 th:attr="aria-label=|전체 제출률 *{rate}퍼센트|">
+						<circle class="ring-track" cx="52" cy="52" r="44"></circle>
+						<!--/* 둘레 276.46(2π×44) 중 제출하지 않은 만큼을 비운다 */-->
+						<circle class="ring-value" cx="52" cy="52" r="44" transform="rotate(-90 52 52)" th:if="*{rate > 0}"
+								th:attr="stroke-dashoffset=${276.46 * (100 - dashboard.rate) / 100}"></circle>
+					</svg>
+					<span aria-hidden="true" th:text="|*{rate}%|">21%</span>
+				</div>
+				<div class="stat-text">
+					<h2>전체 제출률</h2>
+					<span class="stat-value"><span th:text="*{submitted}">412</span>
+						<span class="stat-unit" th:text="|/ *{total}건|">/ 1914건</span></span>
+					<span class="muted small">동의서 제출</span>
+				</div>
+			</section>
+			<section class="stat-card stack">
+				<h2>미제출 학생</h2>
+				<span class="stat-big"><span th:text="*{progress.pending()}">830</span><span class="stat-unit">명</span></span>
+				<span class="muted small" th:text="|동의서를 아직 다 내지 않은 학생 · 전체 *{progress.total()}명|">
+					동의서를 아직 다 내지 않은 학생 · 전체 1156명
+				</span>
+			</section>
+			<section class="stat-card stack" th:object="${dashboard.progress}">
+				<div class="card-head">
+					<h2>학생 기준 진행 상황</h2>
+					<span class="muted small tabular" th:text="|전체 *{total()}명|">전체 1156명</span>
+				</div>
+				<div class="progress-bar" role="img"
+					 th:attr="aria-label=|모두 제출 *{done}명, 일부 미제출 *{partial}명, 로그인 안 함 *{notLoggedIn}명|">
+					<span class="done" th:style="|flex-grow: *{done}|" th:classappend="*{done > 0} ? 'some'"></span>
+					<span class="partial" th:style="|flex-grow: *{partial}|" th:classappend="*{partial > 0} ? 'some'"></span>
+					<span class="not-logged-in" th:style="|flex-grow: *{notLoggedIn}|" th:classappend="*{notLoggedIn > 0} ? 'some'"></span>
+				</div>
+				<!--/* 비율은 전체 제출률처럼 내림한다 */-->
+				<ul class="progress-legend" th:with="whole=${dashboard.progress.total()}">
+					<li>
+						<span class="dot done"></span>
+						<span title="수강 중인 강의의 동의서를 모두 낸 학생">모두 제출</span>
+						<strong class="tabular" th:text="|*{done}명|">326명</strong>
+						<span class="muted tabular" th:text="|${whole == 0 ? 0 : dashboard.progress.done * 100 / whole}%|">28%</span>
+					</li>
+					<li>
+						<span class="dot partial"></span>
+						<span title="로그인했지만 동의서를 다 내지 않은 학생">일부 미제출</span>
+						<strong class="tabular" th:text="|*{partial}명|">218명</strong>
+						<span class="muted tabular" th:text="|${whole == 0 ? 0 : dashboard.progress.partial * 100 / whole}%|">18%</span>
+					</li>
+					<li>
+						<span class="dot not-logged-in"></span>
+						<span title="명부에만 있고 로그인이 확인되지 않은 학생">로그인 안 함</span>
+						<strong class="tabular" th:text="|*{notLoggedIn}명|">612명</strong>
+						<span class="muted tabular" th:text="|${whole == 0 ? 0 : dashboard.progress.notLoggedIn * 100 / whole}%|">52%</span>
+					</li>
+				</ul>
+			</section>
+		</div>
+
+		<div class="dashboard-columns">
+			<section class="card">
+				<div class="card-head">
+					<h2>강의실별 제출률</h2>
+					<span class="muted small">누르면 시간표로 이동</span>
+				</div>
+				<ul class="room-rates">
+					<li th:each="room : *{rooms}">
+						<a th:href="@{/admin/semesters/{id}(id=*{semester.id}, view='timetable', room=${room.room})}">
+							<span class="room-rate-name" th:text="${room.room}">센B201</span>
+							<span class="rate-bar"><span th:style="|width: ${room.rate}%|"></span></span>
+							<span class="room-rate-value"><strong th:text="|${room.rate}%|">21%</strong>
+								<span class="muted" th:text="|${room.submitted}/${room.total}|">61/291</span></span>
+						</a>
+					</li>
+				</ul>
+			</section>
+			<section class="card">
+				<h2>제출률 낮은 강의</h2>
+				<p class="muted" th:if="*{#lists.isEmpty(lagging)}">모든 강의의 동의서를 받았습니다.</p>
+				<div class="table-wrap" th:unless="*{#lists.isEmpty(lagging)}">
+					<table class="wrap">
+						<thead>
+						<tr><th>강의</th><th>강의실 · 시간</th><th class="num">미제출</th><th class="num">제출률</th></tr>
+						</thead>
+						<tbody>
+						<tr th:each="item : *{lagging}">
+							<td><strong th:text="${item.course.name}">컴퓨터네트워크</strong>
+								<span class="sub" th:text="|${item.course.code} · ${item.course.professor}|">003284-008 · [담당교수]</span></td>
+							<td><span th:text="${item.course.room}">센B201</span>
+								<span class="sub" th:text="${item.course.schedule}">월수12:00-13:30</span></td>
+							<td class="num"><span class="count-pill" th:text="${item.unsubmitted}">39</span></td>
+							<td class="num strong" th:text="|${item.rate}%|">0%</td>
+						</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+		</div>
+
+		<section class="card">
+			<h2>데이터 점검</h2>
+			<ul class="checks">
+				<li class="ok" th:if="*{#lists.isEmpty(sjptOnly)}">
+					<svg th:replace="~{admin/fragments :: icon-ok}"></svg>
+					<span>명부에 없는 수강이 없습니다.</span>
+				</li>
+				<li class="warn" th:unless="*{#lists.isEmpty(sjptOnly)}">
+					<svg th:replace="~{admin/fragments :: icon-warn}"></svg>
+					<span class="grow" th:text="|명부에 없고 학생 로그인으로만 확인된 수강이 *{#lists.size(sjptOnly)}건 있습니다. 명부에서 빠졌거나 타과 수업인지 확인하세요.|">
+						명부에 없고 학생 로그인으로만 확인된 수강이 3건 있습니다.
+					</span>
+					<button type="button" class="button outline-warn small" data-dialog="sjpt-only">상세 보기</button>
+				</li>
+				<li class="ok" th:if="*{#lists.isEmpty(unscheduled)}">
+					<svg th:replace="~{admin/fragments :: icon-ok}"></svg>
+					<span>모든 강의가 시간표에 나옵니다.</span>
+				</li>
+				<li class="warn" th:unless="*{#lists.isEmpty(unscheduled)}">
+					<svg th:replace="~{admin/fragments :: icon-warn}"></svg>
+					<span th:text="|강의시간을 읽지 못해 시간표에 나오지 않는 강의가 ${#lists.size(dashboard.unscheduled)}개 있습니다: ${#strings.listJoin(dashboard.unscheduled.![name + ' (' + code + ')'], ', ')}|">
+						강의시간을 읽지 못해 시간표에 나오지 않는 강의가 1개 있습니다.
+					</span>
+				</li>
+				<li class="warn" th:if="*{lastRosterUploadAt == null}">
+					<svg th:replace="~{admin/fragments :: icon-warn}"></svg>
+					<span>이 학기 명부를 아직 올리지 않았습니다. 명부를 올려야 로그인하지 않은 학생까지 미제출로 잡힙니다.</span>
+				</li>
+				<li class="info" th:unless="*{lastRosterUploadAt == null}">
+					<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+						 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="10"></circle>
+						<path d="M12 6v6l4 2"></path>
+					</svg>
+					<span>마지막 명부 반영: <strong class="tabular"
+							th:text="${#temporals.format(dashboard.lastRosterUploadAt.atZoneSameInstant(T(java.time.ZoneId).of('Asia/Seoul')), 'yyyy-MM-dd HH:mm')}">2026-10-22 18:53</strong>.
+						수강정정 기간이 끝난 뒤 최종 명부를 다시 올렸는지 확인하세요.</span>
+				</li>
+			</ul>
+		</section>
+	</th:block>
+
 	<section class="card">
 		<h2>학기</h2>
 		<p class="muted" th:if="${#lists.isEmpty(semesters)}">
@@ -18,22 +195,131 @@
 					<th class="num">동의 대상</th>
 					<th>학기 종료일</th>
 					<th>동의서 파기 예정일</th>
+					<th><span class="visually-hidden">초기화</span></th>
 				</tr>
 				</thead>
 				<tbody>
 				<tr th:each="semester : ${semesters}">
-					<td><a th:href="@{/admin/semesters/{id}(id=${semester.id})}" th:text="${semester.label()}">2026-2학기</a></td>
+					<td><a class="strong-link" th:href="@{/admin/semesters/{id}(id=${semester.id})}" th:text="${semester.label()}">2026-2학기</a></td>
 					<td class="num" th:text="${semester.courseCount}">56</td>
 					<td class="num" th:text="${semester.enrollmentCount}">1789</td>
-					<td th:text="${semester.endsOn}">2026-12-21</td>
-					<td th:text="${semester.purgeOn}">2027-12-21</td>
+					<td class="tabular" th:text="${semester.endsOn}">2026-12-21</td>
+					<td class="tabular" th:text="${semester.purgeOn}">2027-12-21</td>
+					<td class="num">
+						<button type="button" class="button outline-danger small" th:attr="data-dialog=|reset-${semester.id}|">초기화</button>
+					</td>
 				</tr>
 				</tbody>
 			</table>
 		</div>
 	</section>
 
-	<section th:replace="~{admin/fragments :: uploads(${uploads})}"></section>
+	<section th:replace="~{admin/fragments :: uploads(${uploads}, true)}"></section>
 </main>
+
+<dialog class="confirm-dialog" th:each="semester : ${semesters}" th:id="|reset-${semester.id}|"
+		th:attr="aria-labelledby=|reset-${semester.id}-title|"
+		th:with="confirmText=|${semester.label()} 초기화|">
+	<form method="post" th:action="@{/admin/semesters/{id}/reset(id=${semester.id})}" data-confirm-form>
+		<span class="dialog-icon danger" aria-hidden="true">
+			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+				 stroke-linecap="round" stroke-linejoin="round">
+				<path d="M3 6h18"></path>
+				<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+				<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+				<path d="M10 11v6"></path>
+				<path d="M14 11v6"></path>
+			</svg>
+		</span>
+		<div class="dialog-title">
+			<h2 th:id="|reset-${semester.id}-title|" th:text="|${semester.label()}를 초기화할까요?|">2026-2학기를 초기화할까요?</h2>
+			<p>아래 항목이 모두 삭제되며 <strong class="danger-text">되돌릴 수 없습니다.</strong></p>
+		</div>
+		<ul class="delete-list">
+			<li th:text="|이 학기의 수업 ${semester.courseCount}개와 수강|">이 학기의 수업 56개와 수강</li>
+			<li>받은 동의서 (서명, PDF)</li>
+			<li>명부 업로드 이력</li>
+		</ul>
+		<label class="field"><span>확인을 위해 <strong class="code-chip" th:text="${confirmText}">2026-2학기 초기화</strong>를 입력하세요</span>
+			<span class="confirm-input">
+				<input type="text" name="confirmText" autocomplete="off" required th:attr="data-expected=${confirmText}">
+				<svg class="confirm-check" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"
+					 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M20 6 9 17l-5-5"></path>
+				</svg>
+			</span>
+		</label>
+		<!--/* 취소는 제출 버튼이 아니어서 입력 칸에서 Enter를 누르면 초기화 버튼(꺼져 있으면 아무것도)이 눌린다 */-->
+		<div class="dialog-actions">
+			<button type="button" class="button outline" data-dialog-close>취소</button>
+			<button type="submit" class="button danger" disabled data-busy-label="초기화 중…">초기화</button>
+		</div>
+	</form>
+</dialog>
+<dialog class="list-dialog" id="sjpt-only" aria-labelledby="sjpt-only-title"
+		th:if="${dashboard != null and !#lists.isEmpty(dashboard.sjptOnly)}">
+	<div class="list-dialog-head">
+		<span class="dialog-icon danger" aria-hidden="true">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+				 stroke-linecap="round" stroke-linejoin="round">
+				<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
+				<path d="M12 9v4"></path>
+				<path d="M12 17h.01"></path>
+			</svg>
+		</span>
+		<div class="grow">
+			<h2 id="sjpt-only-title">명부에 없는 수강</h2>
+			<p class="muted small" th:text="|${dashboard.semester.label()} · ${#lists.size(dashboard.sjptOnly)}건 · 학생 로그인(SJPT) 시간표에서만 확인됨|">
+				2026-2학기 · 2건 · 학생 로그인(SJPT) 시간표에서만 확인됨
+			</p>
+		</div>
+		<button type="button" class="icon-button" aria-label="닫기" data-dialog-close>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+				 stroke-linecap="round" aria-hidden="true">
+				<path d="M6 6l12 12M18 6L6 18"></path>
+			</svg>
+		</button>
+	</div>
+	<div class="table-wrap boxed">
+		<table>
+			<thead>
+			<tr>
+				<th>학번</th>
+				<th>학생</th>
+				<th>강의</th>
+				<th>학수번호</th>
+				<th>담당교수</th>
+				<th>강의실</th>
+				<th>시간</th>
+			</tr>
+			</thead>
+			<tbody>
+			<tr th:each="item : ${dashboard.sjptOnly}">
+				<td class="tabular" th:text="${item.studentId}">20990001</td>
+				<td th:text="${item.studentName}">[이름]</td>
+				<td th:text="${item.courseName}">타과과목</td>
+				<td class="tabular" th:text="${item.code}">009999-001</td>
+				<td th:text="${item.professor}">[담당교수]</td>
+				<td><span class="room-chip" th:text="${item.room}">센B206</span></td>
+				<td class="tabular" th:text="${item.schedule}">목10:00-12:00</td>
+			</tr>
+			</tbody>
+		</table>
+	</div>
+	<p class="note">
+		<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+			 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<circle cx="12" cy="12" r="10"></circle>
+			<path d="M12 16v-4"></path>
+			<path d="M12 8h.01"></path>
+		</svg>
+		<span>타과 수업이면 그대로 두면 됩니다. 컴퓨터공학과 수업인데 명부에 없다면 최신 명부를 다시 올렸는지 확인하세요.</span>
+	</p>
+	<div class="dialog-actions end">
+		<a class="button outline" th:href="@{/admin/roster}">명부 다시 올리기</a>
+		<button type="button" class="button dark" data-dialog-close>확인</button>
+	</div>
+</dialog>
+<script th:src="@{/js/admin-dialogs.js}"></script>
 </body>
 </html>

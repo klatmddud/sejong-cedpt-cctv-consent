@@ -1,31 +1,58 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{student/fragments :: head('landing.title')}"></head>
-<body>
-<header class="band">
-	<p>세종대학교 컴퓨터공학과</p>
-</header>
-<main class="page narrow centered">
+<body class="landing">
+<main class="page landing-page">
 	<div class="hero">
-		<span class="hero-icon">
-			<svg class="icon" aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" stroke-width="1.75"><path d="M16.75 12h3.63a1 1 0 0 1 .7 1.7l-4.17 4.17a1 1 0 0 1-1.41 0l-1.13-1.13"/><path d="M2.29 9.62a1 1 0 0 1 0-1.41l4.17-4.17a1 1 0 0 1 1.41 0l9.83 9.83a1 1 0 0 1 0 1.41l-1.12 1.13a1 1 0 0 1-1.42 0Z"/><path d="M7 20v-4.5"/><path d="M2 20h5"/></svg>
-		</span>
-		<h1>CCTV 촬영 및 이용 동의</h1>
-		<p class="muted" lang="en">Consent to CCTV Recording and Use</p>
-		<p class="muted" style="font-size: 14px">실습실(B201·B202·B203·B206·B207) 수업 수강생<br><span lang="en">For lab course students</span></p>
+		<div class="hero-mark">
+			<span th:replace="~{student/fragments :: brandMark}"></span>
+		</div>
+		<div class="hero-text">
+			<span class="eyebrow">세종대학교 컴퓨터공학과</span>
+			<h1>CCTV 촬영 및 이용 동의</h1>
+			<p class="muted" lang="en">Consent to CCTV Recording and Use</p>
+		</div>
 	</div>
 
-	<section class="card" aria-labelledby="choose-language">
-		<p class="choice-label muted" id="choose-language">언어를 선택하세요 · <span lang="en">Choose your language</span></p>
-		<a class="choice" th:href="@{/login(lang='ko')}" lang="ko">
-			<span>한국어</span>
+	<!--/* 스크립트 없이도 고른 언어로 로그인 화면(/login?lang=ko|en)으로 간다. language-choice.js는 고른 언어로 문구만 바꾼다 */-->
+	<form class="card lang-card" th:action="@{/login}" method="get" id="language-form"
+		  th:data-cta-ko="${landingText.ko.cta}" th:data-cta-en="${landingText.en.cta}"
+		  th:data-rooms-ko="${landingText.ko.rooms}" th:data-rooms-en="${landingText.en.rooms}"
+		  th:with="english=${#locale.language == 'en'}">
+		<fieldset>
+			<legend>언어를 선택하세요 · <span lang="en">Choose your language</span></legend>
+			<div class="lang-options">
+				<label class="lang-option" lang="ko">
+					<input class="visually-hidden" type="radio" name="lang" value="ko" th:checked="${!english}">
+					<span class="lang-name">한국어</span>
+					<span class="lang-sub" lang="en">Korean</span>
+					<span class="lang-check" aria-hidden="true">
+						<svg class="icon" width="14" height="14" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+					</span>
+				</label>
+				<label class="lang-option" lang="en">
+					<input class="visually-hidden" type="radio" name="lang" value="en" th:checked="${english}">
+					<span class="lang-name">English</span>
+					<span class="lang-sub" lang="ko">영어</span>
+					<span class="lang-check" aria-hidden="true">
+						<svg class="icon" width="14" height="14" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+					</span>
+				</label>
+			</div>
+		</fieldset>
+		<button type="submit" class="button" th:lang="${#locale.language}">
+			<span id="language-cta" th:text="#{landing.continue}">계속하기</span>
 			<svg class="icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-		</a>
-		<a class="choice secondary" th:href="@{/login(lang='en')}" lang="en">
-			<span>English</span>
-			<svg class="icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-		</a>
+		</button>
+	</form>
+
+	<section class="rooms" aria-labelledby="rooms-label">
+		<span class="muted" id="rooms-label" th:lang="${#locale.language}" th:text="#{landing.rooms}">대상: 아래 실습실 수업 수강생</span>
+		<ul class="chips">
+			<li th:each="room : ${rooms}" th:text="${room}">B201</li>
+		</ul>
 	</section>
 </main>
+<script th:src="@{/js/language-choice.js}"></script>
 </body>
 </html>

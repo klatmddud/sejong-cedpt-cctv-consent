@@ -35,6 +35,8 @@ interface CourseRepository extends JpaRepository<Course, Long> {
 
 	List<Course> findBySemester(Semester semester);
 
+	long countBySemester(Semester semester);
+
 	Optional<Course> findBySemesterAndCode(Semester semester, String code);
 
 	List<Course> findBySemesterAndCodeIn(Semester semester, Collection<String> codes);
@@ -54,12 +56,13 @@ interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 	@Query("select e from Enrollment e join fetch e.course c where c.semester = :semester and e.studentId = :studentId")
 	List<Enrollment> findBySemesterAndStudentId(Semester semester, String studentId);
 
+	/** 학생 제출(StudentEnrollmentRepository.lockOpenByIds)과 교착하지 않도록 모두 id 순서로 잠근다. */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("select e from Enrollment e where e.id in :ids")
+	@Query("select e from Enrollment e where e.id in :ids order by e.id")
 	List<Enrollment> lockByIds(Collection<Long> ids);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("select e from Enrollment e where e.course = :course")
+	@Query("select e from Enrollment e where e.course = :course order by e.id")
 	List<Enrollment> lockByCourse(Course course);
 
 	/** [course id, 수강 행 수(수강 중이 아닌 것 포함), 동의서 수]. 과목을 지울 때 함께 지워지는 양이다. */
@@ -70,6 +73,17 @@ interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 			where c.semester_id = :semesterId
 			group by e.course_id""", nativeQuery = true)
 	List<Object[]> countAllByCourse(long semesterId);
+
+	/**
+	 * 명부에 한 번도 없었고 학생 로그인(sjpt)으로만 확인된 수강 중인 수강
+	 * [학번, 이름, 과목명, 학수번호, 담당교수, 강의실, 강의시간], 강의실, 학수번호, 학번 순. 명부 누락이나 타과 수업 확인용.
+	 */
+	@Query(value = """
+			select e.student_id, e.student_name, c.name, c.code, c.professor, c.room, c.schedule
+			from enrollment e join course c on c.id = e.course_id
+			where c.semester_id = :semesterId and e.in_sjpt and not e.ever_in_roster
+			order by c.room, c.code, e.student_id""", nativeQuery = true)
+	List<Object[]> findSjptOnly(long semesterId);
 
 	/** 주어진 수강 중 동의서가 있는 것의 id. consent 패키지에 의존하지 않도록 테이블을 직접 읽는다. */
 	@Query(value = "select enrollment_id from consent where enrollment_id in (:enrollmentIds)", nativeQuery = true)
@@ -87,10 +101,13 @@ interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 			group by e.course.id""")
 	List<Object[]> countActiveByCourse(Semester semester);
 
-	/** 수강 중 학생 [course id, 학번, 이름, 동의서 제출 여부], 학번 순. consent 테이블은 findSignedIds처럼 직접 읽는다. */
+	/**
+	 * 수강 중 학생 [course id, 학번, 이름, 동의서 제출 여부, 학생 로그인(sjpt)에서 확인됨], 학번 순.
+	 * consent 테이블은 findSignedIds처럼 직접 읽는다.
+	 */
 	@Query(value = """
 			select e.course_id, e.student_id, e.student_name,
-			exists (select 1 from consent s where s.enrollment_id = e.id) from enrollment e
+			exists (select 1 from consent s where s.enrollment_id = e.id), e.in_sjpt from enrollment e
 			join course c on c.id = e.course_id
 			where c.semester_id = :semesterId and (e.in_latest_roster or e.in_sjpt)
 			order by e.student_id""", nativeQuery = true)
@@ -103,5 +120,7 @@ interface RosterUploadRepository extends JpaRepository<RosterUpload, Long> {
 	List<RosterUpload> findTop10ByOrderByUploadedAtDesc();
 
 	Optional<RosterUpload> findTopBySemesterOrderByIdDesc(Semester semester);
+
+	Optional<RosterUpload> findTopBySemesterIdOrderByIdDesc(long semesterId);
 
 }

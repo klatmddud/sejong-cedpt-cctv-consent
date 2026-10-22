@@ -9,21 +9,54 @@
 	<link rel="stylesheet" th:href="@{/css/student.css}">
 </head>
 <body>
+<!--/* 교표 자리. 원본 파일을 받으면 이 span을 <img class="brand-mark" th:src="@{/img/파일이름}" alt="">로 바꾼다.
+	옆 글자(또는 언어 선택 화면 제목)가 학교 이름을 읽어 주므로 alt는 비워 둔다. 상단 바와 언어 선택 화면이 함께 쓴다 */-->
+<span th:fragment="brandMark" class="brand-mark" aria-hidden="true">세종</span>
+
+<!--/* 언어 바꾸기. 지금 화면 주소에 ?lang=만 붙인다. 다른 주소 값은 student-nav.js가 유지한다 */-->
+<a th:fragment="langSwitch" class="lang-switch" th:href="@{''(lang=#{language.switch.lang})}"
+   th:lang="#{language.switch.lang}" th:attr="aria-label=#{language.switch}">
+	<svg class="icon" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+	<span th:text="#{language.switch.short}">EN</span>
+</a>
+
+<!--/* 상단 바. student가 없으면(로그인 화면) 계정 메뉴 없이 언어 바꾸기만 둔다 */-->
 <header th:fragment="nav(student)" class="topbar">
 	<div class="topbar-inner">
-		<a class="brand" th:href="@{/consents}" th:text="#{app.title}">CCTV 촬영 동의</a>
-		<nav>
-			<span th:text="|${student.name} (${student.studentId})|">홍길동 (20011234)</span>
-			<a th:href="@{''(lang=#{language.switch.lang})}" th:text="#{language.switch}">English</a>
-			<form th:action="@{/logout}" method="post">
-				<button type="submit" th:text="#{nav.logout}">로그아웃</button>
-			</form>
-		</nav>
+		<a class="brand" th:href="${student != null} ? @{/consents} : @{/}">
+			<span th:replace="~{student/fragments :: brandMark}"></span>
+			<span class="brand-text">
+				<span class="brand-eyebrow" th:text="#{nav.eyebrow}">세종대학교 컴퓨터공학과</span>
+				<span class="brand-name" th:text="#{app.title}">CCTV 촬영 동의</span>
+			</span>
+		</a>
+		<div class="topbar-actions">
+			<a th:replace="~{student/fragments :: langSwitch}"></a>
+			<details class="account" th:if="${student != null}">
+				<summary th:attr="aria-label=#{nav.account}">
+					<span class="avatar" aria-hidden="true"
+						  th:text="${#strings.isEmpty(student.name)} ? '·' : ${#strings.substring(student.name, 0, 1)}">이</span>
+					<svg class="icon chevron" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+				</summary>
+				<div class="account-menu">
+					<div class="account-who">
+						<strong th:text="${student.name}">[이름]</strong>
+						<span th:text="#{nav.studentId(${student.studentId})}">학번 2099xxxx</span>
+					</div>
+					<form th:action="@{/logout}" method="post">
+						<button type="submit">
+							<svg class="icon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+							<span th:text="#{nav.logout}">로그아웃</span>
+						</button>
+					</form>
+				</div>
+			</details>
+		</div>
 	</div>
 </header>
 
 <!-- 동의서 내용: 원본 PDF(consent_ko.pdf, consent_en.pdf)와 같은 내용을 요약 + 전문으로 보여 준다 -->
-<div th:fragment="summary" class="summary">
+<div th:fragment="consentSummary" class="summary">
 	<th:block th:if="${#locale.language == 'en'}">
 		<h3>Summary of consent to CCTV recording and use</h3>
 		<dl>
@@ -33,7 +66,7 @@
 			<div><dt>How to Request Access</dt><dd>Contact and apply to the Office of Construction and Development, Sejong University (02-3408-3100)</dd></div>
 		</dl>
 		<details>
-			<summary>Read full text</summary>
+			<summary><span>Read full text</span><svg class="icon chevron" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
 			<div>
 				<p>Sejong University is committed to complying with the personal information protection provisions of the
 					Personal Information Protection Act and other relevant laws, and to doing its utmost to protect the
@@ -54,7 +87,7 @@
 			<div><dt>열람 방법</dt><dd>세종대학교 건설개발과에 문의 (02-3408-3100) 및 신청</dd></div>
 		</dl>
 		<details>
-			<summary>전문 보기</summary>
+			<summary><span>전문 보기</span><svg class="icon chevron" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
 			<div>
 				<p>세종대학교에서는 개인정보보호법 등 관련 법령 상 개인정보보호 규정 준수 및 이용자의 개인정보보호에 최선을 다하고 있습니다.
 					개인정보보호법 제15조 1항에 따라 세종대학교를 이용함에 있어 위와 같이 귀하의 개인정보가 수집 및 이용될 수 있음을
