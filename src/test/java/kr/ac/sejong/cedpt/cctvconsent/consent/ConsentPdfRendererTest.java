@@ -10,6 +10,7 @@ import java.time.ZonedDateTime;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -37,6 +38,21 @@ class ConsentPdfRendererTest {
 			assertThat(document.getPage(0).getResources().getXObjectNames()).isNotEmpty();
 		}
 		assertThat(pdf.length).isLessThan(400_000);
+	}
+
+	@Test
+	void drawsCoverWithCourseDetails() throws IOException {
+		byte[] pdf = renderer.cover("시작", "문제해결및실습:JAVA", "009956-001", "센B201", null);
+
+		Path sample = Path.of("build", "consent-samples", "cover.pdf");
+		Files.createDirectories(sample.getParent());
+		Files.write(sample, pdf);
+
+		try (PDDocument document = Loader.loadPDF(pdf)) {
+			assertThat(document.getNumberOfPages()).isEqualTo(1);
+			assertThat(new PDFTextStripper().getText(document))
+					.contains("시작", "문제해결및실습:JAVA", "학수번호  009956-001", "강의실  센B201", "담당교수  -");
+		}
 	}
 
 }

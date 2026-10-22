@@ -1,16 +1,23 @@
 package kr.ac.sejong.cedpt.cctvconsent.admin;
 
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import kr.ac.sejong.cedpt.cctvconsent.consent.ConsentBundleService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.CourseDeletionService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterParseException;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.TargetRooms;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.web.WebAttributes;
 import org.springframework.stereotype.Controller;
@@ -50,13 +57,15 @@ class AdminController {
 	private final RosterQueryService queries;
 	private final CourseDeletionService courseDeletion;
 	private final TargetRooms targetRooms;
+	private final ConsentBundleService bundles;
 
 	AdminController(RosterImportService importService, RosterQueryService queries,
-			CourseDeletionService courseDeletion, TargetRooms targetRooms) {
+			CourseDeletionService courseDeletion, TargetRooms targetRooms, ConsentBundleService bundles) {
 		this.importService = importService;
 		this.queries = queries;
 		this.courseDeletion = courseDeletion;
 		this.targetRooms = targetRooms;
+		this.bundles = bundles;
 	}
 
 	@GetMapping("/login")
@@ -88,6 +97,30 @@ class AdminController {
 		model.addAttribute("timetable", "timetable".equals(view));
 		model.addAttribute("page", SemesterPage.of(queries.courses(id), room, targetRooms::matching));
 		return "admin/semester";
+	}
+
+	/**
+	 * 고른 과목들의 동의서를 PDF 하나로 내려준다. 과목마다 시작, 끝 표지가 들어간다.
+	 * 파일이 클 수 있어 임시 파일로 만든 뒤 그대로 흘려보내고 지운다.
+	 *
+	 * @return 고른 과목이 없을 때만 학기 화면으로 돌려보낸다. 내려줬으면 null(응답을 직접 씀)
+	 */
+	@PostMapping("/semesters/{id}/consents/download")
+	String downloadConsents(@PathVariable long id, @RequestParam(name = "codes", required = false) List<String> codes,
+			HttpServletResponse response, RedirectAttributes redirect) throws IOException {
+		try (ConsentBundleService.Bundle bundle = bundles.bundle(id, codes == null ? List.of() : codes)) {
+			response.setContentType(MediaType.APPLICATION_PDF_VALUE);
+			response.setContentLengthLong(Files.size(bundle.file()));
+			response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+					ContentDisposition.attachment().filename(bundle.fileName(), StandardCharsets.UTF_8).build().toString());
+			Files.copy(bundle.file(), response.getOutputStream());
+			return null;
+		}
+		catch (ConsentBundleService.NoCourseException ex) {
+			redirect.addAttribute("id", id);
+			redirect.addFlashAttribute("error", ex.getMessage());
+			return "redirect:/admin/semesters/{id}";
+		}
 	}
 
 	/**

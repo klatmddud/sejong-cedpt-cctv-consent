@@ -439,12 +439,46 @@ td.file {
 	border-radius: 8px;
 }
 
+.course-line {
+	display: flex;
+	align-items: stretch;
+	min-width: 904px;
+	border-bottom: 1px solid var(--border);
+	background: var(--surface);
+}
+
+.course-line:last-child {
+	border-bottom: 0;
+}
+
+.course-line:has(input:checked) {
+	background: var(--accent-tint);
+}
+
+.course-check {
+	display: flex;
+	flex: 0 0 44px;
+	margin: 0;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.course-check input,
+.check-label input {
+	width: 18px;
+	height: 18px;
+	margin: 0;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+
 .course-cols {
 	display: grid;
+	flex: 1;
 	grid-template-columns: 76px 100px minmax(200px, 1fr) 108px 136px 60px 88px;
 	column-gap: 12px;
 	align-items: center;
-	min-width: 836px;
 }
 
 .course-cols .num {
@@ -453,22 +487,22 @@ td.file {
 }
 
 .course-table-head {
-	padding: 8px 12px;
-	border-bottom: 1px solid var(--border);
 	background: #fafaf9;
 	color: var(--muted);
 	font-size: 13px;
 	font-weight: 600;
 }
 
+.course-table-head .course-cols {
+	padding: 8px 12px 8px 0;
+}
+
 .course-row {
-	display: block;
-	width: 100%;
-	min-width: 860px;
-	padding: 10px 12px;
+	display: flex;
+	flex: 1;
+	padding: 10px 12px 10px 0;
 	border: 0;
-	border-bottom: 1px solid var(--border);
-	background: var(--surface);
+	background: transparent;
 	color: inherit;
 	font: inherit;
 	font-size: 14px;
@@ -476,12 +510,42 @@ td.file {
 	cursor: pointer;
 }
 
-.course-row:last-child {
-	border-bottom: 0;
+.course-row:hover {
+	background: rgba(28, 25, 23, 0.03);
 }
 
-.course-row:hover {
-	background: #fafaf9;
+.selection-bar {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+}
+
+.selection-bar button.primary {
+	width: auto;
+	margin-left: auto;
+}
+
+.selection-bar button.primary:disabled {
+	background: #d6d3d1;
+	cursor: not-allowed;
+}
+
+form .check-label,
+.check-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	font-weight: 600;
+	cursor: pointer;
 }
 
 .course-name {

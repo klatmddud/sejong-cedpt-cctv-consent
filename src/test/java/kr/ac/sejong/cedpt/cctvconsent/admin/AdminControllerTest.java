@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -116,6 +117,34 @@ class AdminControllerTest extends PostgresTestSupport {
 				.andExpect(content().string(Matchers.containsString("class=\"timetable-block\"")))
 				.andExpect(content().string(Matchers.containsString("data-dialog=\"course-000400-001\"")))
 				.andExpect(content().string(Matchers.not(Matchers.containsString("class=\"course-row\""))));
+	}
+
+	@Test
+	void downloadsSelectedCoursesAsOnePdf() throws Exception {
+		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, RosterTestFixtures.roster(List.of(
+				RosterTestFixtures.course("000304-001", "센B201", "20010001"),
+				RosterTestFixtures.course("000400-001", "센B203", "20010003"))));
+		mvc.perform(multipart("/admin/roster").file(file).with(user("admin").roles("ADMIN")).with(csrf()));
+		long semesterId = jdbc.queryForObject("select id from semester", Long.class);
+
+		mvc.perform(get("/admin/semesters/{id}", semesterId).with(user("admin").roles("ADMIN")))
+				.andExpect(content().string(Matchers.containsString("name=\"codes\" value=\"000304-001\"")));
+
+		byte[] pdf = mvc.perform(post("/admin/semesters/{id}/consents/download", semesterId)
+						.param("codes", "000304-001", "000400-001", "000304-001")
+						.with(user("admin").roles("ADMIN")).with(csrf()))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType("application/pdf"))
+				.andExpect(header().string("Content-Disposition", Matchers.startsWith("attachment;")))
+				.andReturn().getResponse().getContentAsByteArray();
+		try (var document = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+			assertThat(document.getNumberOfPages()).isEqualTo(4);
+		}
+
+		mvc.perform(post("/admin/semesters/{id}/consents/download", semesterId)
+						.with(user("admin").roles("ADMIN")).with(csrf()))
+				.andExpect(redirectedUrl("/admin/semesters/" + semesterId))
+				.andExpect(flash().attribute("error", Matchers.containsString("과목을 고르세요")));
 	}
 
 	@Test

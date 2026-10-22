@@ -7,12 +7,14 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.ZonedDateTime;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDPageContentStream.AppendMode;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Component;
  *
  * 좌표는 원본 PDF에서 PDFBox로 뽑은 글자 위치(포인트, 왼쪽 아래 원점)다. 원본 양식이 바뀌면 다시 측정해야 한다.
  * 한글본의 "동의인 (사인)" 줄은 이름을 넣을 공간이 없어서 지우고 "동의인 성명 (사인)"으로 다시 쓴다.
+ * 관리자 일괄 다운로드에서 과목을 나누는 표지(cover)도 같은 글꼴로 그린다.
  */
 @Component
 public class ConsentPdfRenderer {
@@ -62,6 +65,40 @@ public class ConsentPdfRenderer {
 		catch (IOException ex) {
 			throw new UncheckedIOException("동의서 PDF를 만들 수 없습니다.", ex);
 		}
+	}
+
+	/**
+	 * 동의서 묶음에서 과목을 나누는 흰 표지 한 장(A4). 가운데에 표시(시작/끝), 강의명, 학수번호, 강의실, 담당교수를 쓴다.
+	 *
+	 * @param mark "시작" 또는 "끝"
+	 */
+	public byte[] cover(String mark, String courseName, String code, String room, String professor) {
+		try (PDDocument document = new PDDocument()) {
+			PDPage page = new PDPage(PDRectangle.A4);
+			document.addPage(page);
+			PDFont font = PDType0Font.load(document, new ByteArrayInputStream(this.font), true);
+			float center = PDRectangle.A4.getWidth() / 2;
+			float maxWidth = PDRectangle.A4.getWidth() - 120;
+			try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+				drawCentered(content, font, 40, mark, center, 560);
+				drawCentered(content, font, fitSize(font, courseName, 26, maxWidth), courseName, center, 480);
+				float baseline = 430;
+				for (String line : List.of("학수번호  " + code, "강의실  " + room, "담당교수  " + orDash(professor))) {
+					drawCentered(content, font, fitSize(font, line, 15, maxWidth), line, center, baseline);
+					baseline -= 28;
+				}
+			}
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			document.save(out);
+			return out.toByteArray();
+		}
+		catch (IOException ex) {
+			throw new UncheckedIOException("동의서 표지를 만들 수 없습니다.", ex);
+		}
+	}
+
+	private static String orDash(String value) {
+		return value == null || value.isBlank() ? "-" : value;
 	}
 
 	private static void drawKorean(PDPageContentStream content, PDFont font, String name, ZonedDateTime at,

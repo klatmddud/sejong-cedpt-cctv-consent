@@ -26,7 +26,17 @@
 
 		<p class="muted" th:if="${#lists.isEmpty(page.groups)}">이 학기에 동의 대상 수업이 없습니다.</p>
 
-		<div class="room-groups" th:unless="${timetable}">
+		<form class="room-groups" id="consent-download" method="post"
+			  th:unless="${timetable or #lists.isEmpty(page.groups)}"
+			  th:action="@{/admin/semesters/{id}/consents/download(id=${semester.id})}">
+			<div class="selection-bar">
+				<label class="check-label">
+					<input type="checkbox" id="select-all-courses">
+					<span>전체 선택</span>
+				</label>
+				<span class="muted small" id="selected-course-count" aria-live="polite">선택한 강의 없음</span>
+				<button type="submit" class="primary" id="download-consents" disabled>선택한 강의 동의서 PDF 받기</button>
+			</div>
 			<div class="room-group" th:each="group : ${page.groups}">
 				<div class="room-group-head">
 					<h3 th:text="${group.room}">센B201</h3>
@@ -36,31 +46,40 @@
 					</span>
 				</div>
 				<div class="course-table">
-					<div class="course-cols course-table-head">
-						<span>강의실</span>
-						<span>학수번호</span>
-						<span>과목명</span>
-						<span>담당교수</span>
-						<span>강의시간</span>
-						<span class="num">학생</span>
-						<span class="num">미제출 학생</span>
-					</div>
-					<button type="button" class="course-row" th:each="course : ${group.courses}"
-							th:attr="data-dialog=|course-${course.code}|">
+					<div class="course-line course-table-head">
+						<span class="course-check"></span>
 						<span class="course-cols">
-							<span th:text="${course.room}">센B201</span>
-							<span class="tabular" th:text="${course.code}">000304-001</span>
-							<span class="course-name" th:text="${course.name}">공업수학1</span>
-							<span th:text="${course.professor}">홍길동</span>
-							<span class="tabular" th:text="${course.schedule}">월10:30-12:00</span>
-							<span class="num" th:text="${course.studentCount}">19</span>
-							<span class="num" th:classappend="${course.unsubmittedCount() > 0} ? 'unsubmitted' : 'muted'"
-								  th:text="${course.unsubmittedCount()}">7</span>
+							<span>강의실</span>
+							<span>학수번호</span>
+							<span>과목명</span>
+							<span>담당교수</span>
+							<span>강의시간</span>
+							<span class="num">학생</span>
+							<span class="num">미제출 학생</span>
 						</span>
-					</button>
+					</div>
+					<div class="course-line" th:each="course : ${group.courses}">
+						<label class="course-check">
+							<input type="checkbox" name="codes" th:value="${course.code}"
+								   th:attr="aria-label=|${course.name} ${course.code} 선택|">
+						</label>
+						<button type="button" class="course-row" th:attr="data-dialog=|course-${course.code}|">
+							<span class="course-cols">
+								<span th:text="${course.room}">센B201</span>
+								<span class="tabular" th:text="${course.code}">000304-001</span>
+								<span class="course-name" th:text="${course.name}">공업수학1</span>
+								<span th:text="${course.professor}">홍길동</span>
+								<span class="tabular" th:text="${course.schedule}">월10:30-12:00</span>
+								<span class="num" th:text="${course.studentCount}">19</span>
+								<span class="num" th:classappend="${course.unsubmittedCount() > 0} ? 'unsubmitted' : 'muted'"
+									  th:text="${course.unsubmittedCount()}">7</span>
+							</span>
+						</button>
+					</div>
 				</div>
 			</div>
-		</div>
+			<p class="muted small">PDF에는 강의마다 시작 표지, 받은 동의서(학번 순), 끝 표지가 들어갑니다. 동의서가 많으면 만드는 데 시간이 걸릴 수 있습니다.</p>
+		</form>
 
 		<div class="timetable-view" th:if="${timetable and page.room != null}">
 			<nav class="room-tabs" aria-label="강의실">
