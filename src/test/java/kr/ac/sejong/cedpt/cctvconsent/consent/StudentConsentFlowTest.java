@@ -19,7 +19,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.servlet.http.Cookie;
-import java.io.ByteArrayInputStream;
 import java.time.LocalDate;
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.PostgresTestSupport;
@@ -77,7 +76,7 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 				RosterTestFixtures.course("000304-001", "센B201", STUDENT, OTHER),
 				RosterTestFixtures.course("000305-001", "센B206", STUDENT),
 				RosterTestFixtures.course("000306-001", "센B209", STUDENT)));
-		rosterImport.importRoster("명부.xlsx", new ByteArrayInputStream(roster), LocalDate.now().plusMonths(3), List.of());
+		rosterImport.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", roster)), LocalDate.now().plusMonths(3), List.of());
 	}
 
 	@Test

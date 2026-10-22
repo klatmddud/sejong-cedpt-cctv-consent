@@ -3,7 +3,6 @@ package kr.ac.sejong.cedpt.cctvconsent.roster;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.io.ByteArrayInputStream;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -217,6 +216,58 @@ class RosterImportServiceTest extends PostgresTestSupport {
 	}
 
 	@Test
+	void separateUploadUpdatesOnlyItsOwnCourses() {
+		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
+		RosterImportService.Result second = importRoster(LocalDate.of(2026, 12, 21),
+				FixtureCourse.of("000400-001", "센B203", "20010003"));
+
+		assertThat(second.removedCount()).isZero();
+		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
+		assertThat(activeByCourse(semester)).containsOnly(
+				Map.entry("000304-001", List.of("20010001", "20010002")),
+				Map.entry("000400-001", List.of("20010003")));
+
+		RosterImportService.Result again = importRoster(LocalDate.of(2026, 12, 21),
+				FixtureCourse.of("000304-001", "센B201", "20010002"));
+
+		assertThat(again.removedCount()).isEqualTo(1);
+		assertThat(activeByCourse(semester)).containsOnly(
+				Map.entry("000304-001", List.of("20010002")),
+				Map.entry("000400-001", List.of("20010003")));
+	}
+
+	@Test
+	void mergesFilesUploadedTogether() {
+		RosterImportService.Result result = importService.importRoster(List.of(
+				file("소융.xlsx", TITLE,
+						FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"),
+						FixtureCourse.of("000305-001", "센B202", "20010002")),
+				file("AI융.xlsx", TITLE,
+						FixtureCourse.of("000304-001", "센B201", "20010002", "20010003"),
+						FixtureCourse.of("000400-001", "센B203", "20010004"))),
+				LocalDate.of(2026, 12, 21), List.of());
+
+		assertThat(result).isEqualTo(new RosterImportService.Result(2026, "2", 3, 5, 4, 5, 0, 0, 0));
+		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
+		assertThat(activeByCourse(semester)).containsOnly(
+				Map.entry("000304-001", List.of("20010001", "20010002", "20010003")),
+				Map.entry("000305-001", List.of("20010002")),
+				Map.entry("000400-001", List.of("20010004")));
+		assertThat(uploads.findAll()).singleElement()
+				.extracting(RosterUpload::getFileName).isEqualTo("소융.xlsx, AI융.xlsx");
+	}
+
+	@Test
+	void rejectsFilesOfDifferentSemestersUploadedTogether() {
+		assertThatThrownBy(() -> importService.importRoster(List.of(
+				file("소융.xlsx", TITLE, FixtureCourse.of("000304-001", "센B201", "20010001")),
+				file("AI융.xlsx", "2026년도 1학기 출석부", FixtureCourse.of("000400-001", "센B203", "20010004"))),
+				LocalDate.of(2026, 12, 21), List.of()))
+				.isInstanceOf(RosterParseException.class);
+		assertThat(semesters.count()).isZero();
+	}
+
+	@Test
 	void rejectsRosterWithoutTargetRooms() {
 		assertThatThrownBy(() -> importRoster(LocalDate.of(2026, 12, 21),
 				FixtureCourse.of("000306-001", "센B209", "20010003")))
@@ -231,7 +282,11 @@ class RosterImportServiceTest extends PostgresTestSupport {
 	private RosterImportService.Result importRoster(LocalDate endsOn,
 			List<RosterImportService.ConsentDeletion> confirmed, FixtureCourse... courses) {
 		byte[] xlsx = RosterWorkbookFixture.workbook(TITLE, 45, List.of(courses));
-		return importService.importRoster("명부.xlsx", new ByteArrayInputStream(xlsx), endsOn, confirmed);
+		return importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)), endsOn, confirmed);
+	}
+
+	private static RosterImportService.UploadedFile file(String name, String title, FixtureCourse... courses) {
+		return new RosterImportService.UploadedFile(name, RosterWorkbookFixture.workbook(title, 45, List.of(courses)));
 	}
 
 	private List<RosterImportService.ConsentDeletion> confirmationFor(FixtureCourse... courses) {

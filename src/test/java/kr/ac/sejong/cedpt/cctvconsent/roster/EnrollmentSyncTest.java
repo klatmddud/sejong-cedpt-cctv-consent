@@ -2,7 +2,6 @@ package kr.ac.sejong.cedpt.cctvconsent.roster;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.ByteArrayInputStream;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +93,7 @@ class EnrollmentSyncTest extends PostgresTestSupport {
 
 	private void importRoster(FixtureCourse... rosterCourses) {
 		byte[] xlsx = RosterWorkbookFixture.workbook("2026년도 2학기 출석부", 45, List.of(rosterCourses));
-		importService.importRoster("명부.xlsx", new ByteArrayInputStream(xlsx), LocalDate.of(2026, 12, 21), List.of());
+		importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)), LocalDate.of(2026, 12, 21), List.of());
 	}
 
 	private static EnrollmentSync.EnrolledCourse course(String code, String room) {

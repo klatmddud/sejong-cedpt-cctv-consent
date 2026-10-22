@@ -1,11 +1,12 @@
 package kr.ac.sejong.cedpt.cctvconsent.admin;
 
 import jakarta.servlet.http.HttpSession;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterParseException;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService;
@@ -29,7 +30,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 class AdminController {
 
 	/** 동의서 삭제 확인을 기다리는 업로드. 확인하면 같은 파일로 다시 반영한다. */
-	record PendingRoster(String fileName, byte[] content, LocalDate endsOn,
+	record PendingRoster(String fileName, List<RosterImportService.UploadedFile> files, LocalDate endsOn,
 			List<RosterImportService.ConsentDeletion> deletions) implements Serializable {
 	}
 
@@ -76,29 +77,36 @@ class AdminController {
 	}
 
 	@PostMapping("/roster")
-	String uploadRoster(@RequestParam("file") MultipartFile file,
+	String uploadRoster(@RequestParam("file") List<MultipartFile> uploaded,
 			@RequestParam("endsOn") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endsOn,
 			HttpSession session, RedirectAttributes redirect) {
 		session.removeAttribute(PENDING_ROSTER);
-		String fileName = fileName(file);
-		if (file.isEmpty() || !fileName.toLowerCase().endsWith(".xlsx")) {
+		List<RosterImportService.UploadedFile> files = new ArrayList<>();
+		for (MultipartFile file : uploaded) {
+			String fileName = fileName(file);
+			if (file.isEmpty() || !fileName.toLowerCase().endsWith(".xlsx")) {
+				redirect.addFlashAttribute("error", "수강명부 xlsx 파일을 선택하세요.");
+				return "redirect:/admin/roster";
+			}
+			try {
+				files.add(new RosterImportService.UploadedFile(fileName, file.getBytes()));
+			}
+			catch (IOException ex) {
+				redirect.addFlashAttribute("error", "업로드한 파일을 읽을 수 없습니다.");
+				return "redirect:/admin/roster";
+			}
+		}
+		if (files.isEmpty()) {
 			redirect.addFlashAttribute("error", "수강명부 xlsx 파일을 선택하세요.");
 			return "redirect:/admin/roster";
 		}
-		byte[] content;
 		try {
-			content = file.getBytes();
-		}
-		catch (IOException ex) {
-			redirect.addFlashAttribute("error", "업로드한 파일을 읽을 수 없습니다.");
-			return "redirect:/admin/roster";
-		}
-		try {
-			redirect.addFlashAttribute("result", importService.importRoster(fileName,
-					new ByteArrayInputStream(content), endsOn, List.of()));
+			redirect.addFlashAttribute("result", importService.importRoster(files, endsOn, List.of()));
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
-			session.setAttribute(PENDING_ROSTER, new PendingRoster(fileName, content, endsOn, ex.getDeletions()));
+			String fileNames = files.stream().map(RosterImportService.UploadedFile::name)
+					.collect(Collectors.joining(", "));
+			session.setAttribute(PENDING_ROSTER, new PendingRoster(fileNames, files, endsOn, ex.getDeletions()));
 		}
 		catch (RosterParseException ex) {
 			redirect.addFlashAttribute("error", ex.getMessage());
@@ -117,13 +125,13 @@ class AdminController {
 			return "redirect:/admin/roster";
 		}
 		try {
-			redirect.addFlashAttribute("result", importService.importRoster(pending.fileName(),
-					new ByteArrayInputStream(pending.content()), pending.endsOn(), pending.deletions()));
+			redirect.addFlashAttribute("result", importService.importRoster(pending.files(), pending.endsOn(),
+					pending.deletions()));
 			session.removeAttribute(PENDING_ROSTER);
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
 			session.setAttribute(PENDING_ROSTER,
-					new PendingRoster(pending.fileName(), pending.content(), pending.endsOn(), ex.getDeletions()));
+					new PendingRoster(pending.fileName(), pending.files(), pending.endsOn(), ex.getDeletions()));
 			redirect.addFlashAttribute("error", "확인하는 사이 삭제될 동의서가 바뀌었습니다. 목록을 다시 확인하세요.");
 		}
 		catch (RosterParseException ex) {

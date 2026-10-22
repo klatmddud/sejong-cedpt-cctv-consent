@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.PostgresTestSupport;
 import kr.ac.sejong.cedpt.cctvconsent.roster.EnrollmentSync;
+import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterTestFixtures;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,6 +92,20 @@ class AdminControllerTest extends PostgresTestSupport {
 				.andExpect(status().isOk())
 				.andExpect(content().string(Matchers.containsString("2026-2학기")))
 				.andExpect(content().string(Matchers.containsString("2027-12-21")));
+	}
+
+	@Test
+	void uploadsSeveralRosterFilesTogether() throws Exception {
+		MockMultipartFile first = new MockMultipartFile("file", "소융.xlsx", null, RosterTestFixtures.roster(List.of(
+				RosterTestFixtures.course("000304-001", "센B201", "20010001"))));
+		MockMultipartFile second = new MockMultipartFile("file", "AI융.xlsx", null, RosterTestFixtures.roster(List.of(
+				RosterTestFixtures.course("000400-001", "센B203", "20010002"))));
+
+		mvc.perform(multipart("/admin/roster").file(first).file(second).param("endsOn", "2026-12-21")
+						.with(user("admin").roles("ADMIN")).with(csrf()))
+				.andExpect(redirectedUrl("/admin/roster"))
+				.andExpect(result -> assertThat(((RosterImportService.Result) result.getFlashMap().get("result"))
+						.courseCount()).isEqualTo(2));
 	}
 
 	@Test

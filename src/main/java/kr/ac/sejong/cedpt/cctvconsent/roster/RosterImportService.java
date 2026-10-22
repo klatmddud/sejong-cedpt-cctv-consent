@@ -1,12 +1,13 @@
 package kr.ac.sejong.cedpt.cctvconsent.roster;
 
-import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.io.Serializable;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,6 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * 같은 학기 명부를 다시 올리면 새 학생을 추가하고, 명부에서 빠진 학생은 inLatestRoster=false로 표시한다.
  * 이전 명부에 있던 수강 행은 지우지 않으므로 이미 받은 동의는 유지된다.
+ *
+ * 명부는 단과대학별로 여러 파일이다. 여러 파일을 함께 올리면 하나로 합치고(같은 수업은 명단을 합친다),
+ * 따로 올리면 이번에 올린 수업만 갱신한다. 그래서 학기 명부는 지금까지 올린 파일을 합친 것이 되고,
+ * 같은 수업이 다시 올라오면 마지막에 올린 명단이 기준이다. 명부에서 통째로 빠진 수업(폐강)은 정리되지 않는다.
  *
  * 명부는 수강정정 기간이 끝난 뒤 올리는 확정본이다. 명부에 있는 수업인데 그 수업 명단에 없는 수강은
  * - 한 번도 명부에 없었던 수강(학생 로그인 때 sjpt로만 확인된 수강): 정정 기간에 취소한 것으로 보고 동의서와 함께 삭제한다.
@@ -49,6 +54,10 @@ public class RosterImportService {
 			int addedCount, int removedCount, int deletedCount, int deletedConsentCount) {
 	}
 
+	/** 관리자가 올린 명부 파일 */
+	public record UploadedFile(String name, byte[] content) implements Serializable {
+	}
+
 	/** 동의서와 함께 삭제될 수강 */
 	public record ConsentDeletion(long enrollmentId, String studentId, String studentName, String courseCode,
 			String courseName) implements Serializable {
@@ -75,9 +84,9 @@ public class RosterImportService {
 	 * @throws ConfirmationRequiredException 삭제할 동의서 중 확인하지 않은 것이 있음
 	 */
 	@Transactional
-	public Result importRoster(String fileName, InputStream xlsx, LocalDate semesterEndsOn,
+	public Result importRoster(List<UploadedFile> files, LocalDate semesterEndsOn,
 			Collection<ConsentDeletion> confirmedDeletions) {
-		RosterFile roster = RosterParser.parse(xlsx);
+		RosterFile roster = merge(files);
 		List<RosterFile.Course> targets = roster.courses().stream()
 				.filter(course -> targetRooms.includes(course.room()))
 				.toList();
@@ -92,9 +101,14 @@ public class RosterImportService {
 
 		Map<String, Course> courseByCode = courses.findBySemester(semester).stream()
 				.collect(Collectors.toMap(Course::getCode, Function.identity()));
+		Set<String> rosterCodes = courseCodes(targets);
 		Map<String, Enrollment> enrollmentByKey = new HashMap<>();
 		Set<String> previouslyActive = new HashSet<>();
 		for (Enrollment enrollment : enrollments.findBySemester(semester)) {
+			// 다른 파일로 올린 수업은 이번 명부가 판단할 수 없으므로 건드리지 않는다
+			if (!rosterCodes.contains(enrollment.getCourse().getCode())) {
+				continue;
+			}
 			String key = key(enrollment.getCourse().getCode(), enrollment.getStudentId());
 			enrollmentByKey.put(key, enrollment);
 			if (enrollment.isInLatestRoster()) {
@@ -140,10 +154,9 @@ public class RosterImportService {
 			}
 		}
 
-		Set<String> rosterCodes = courseCodes(targets);
 		List<Enrollment> cancelled = new ArrayList<>();
 		enrollmentByKey.forEach((key, enrollment) -> {
-			if (!rosterCodes.contains(enrollment.getCourse().getCode()) || nowActive.contains(key)) {
+			if (nowActive.contains(key)) {
 				return;
 			}
 			if (enrollment.isEverInRoster()) {
@@ -174,10 +187,51 @@ public class RosterImportService {
 
 		previouslyActive.removeAll(nowActive);
 		int removed = previouslyActive.size();
-		uploads.save(new RosterUpload(semester, fileName, targets.size(), enrollmentCount, added, removed,
+		uploads.save(new RosterUpload(semester, fileNames(files), targets.size(), enrollmentCount, added, removed,
 				cancelled.size(), signed.size()));
 		return new Result(roster.year(), roster.term(), targets.size(), enrollmentCount, students.size(), added, removed,
 				cancelled.size(), signed.size());
+	}
+
+	/** 함께 올린 파일을 한 명부로 합친다. 여러 파일에 있는 수업은 명단을 합친다. */
+	private static RosterFile merge(List<UploadedFile> files) {
+		if (files.isEmpty()) {
+			throw new RosterParseException("수강명부 파일이 없습니다.");
+		}
+		List<RosterFile> parsed = new ArrayList<>();
+		for (UploadedFile file : files) {
+			try {
+				parsed.add(RosterParser.parse(new ByteArrayInputStream(file.content())));
+			}
+			catch (RosterParseException ex) {
+				throw new RosterParseException(file.name() + ": " + ex.getMessage(), ex);
+			}
+		}
+		RosterFile first = parsed.get(0);
+		Map<String, RosterFile.Course> byCode = new LinkedHashMap<>();
+		for (RosterFile file : parsed) {
+			if (file.year() != first.year() || !file.term().equals(first.term())) {
+				throw new RosterParseException("서로 다른 학기의 명부는 함께 올릴 수 없습니다.");
+			}
+			for (RosterFile.Course course : file.courses()) {
+				byCode.merge(course.code(), course, RosterImportService::mergeStudents);
+			}
+		}
+		return new RosterFile(first.year(), first.term(), List.copyOf(byCode.values()));
+	}
+
+	private static RosterFile.Course mergeStudents(RosterFile.Course first, RosterFile.Course second) {
+		Map<String, RosterFile.Student> students = new LinkedHashMap<>();
+		first.students().forEach(student -> students.put(student.studentId(), student));
+		second.students().forEach(student -> students.putIfAbsent(student.studentId(), student));
+		return new RosterFile.Course(first.code(), first.name(), first.professor(), first.schedule(), first.room(),
+				List.copyOf(students.values()));
+	}
+
+	/** DB 칼럼 길이(255)에 맞춘다. */
+	private static String fileNames(List<UploadedFile> files) {
+		String names = files.stream().map(UploadedFile::name).collect(Collectors.joining(", "));
+		return names.length() > 255 ? names.substring(0, 254) + "…" : names;
 	}
 
 	private static Set<String> courseCodes(List<RosterFile.Course> courses) {
