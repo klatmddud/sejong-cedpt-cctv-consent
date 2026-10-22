@@ -3,7 +3,6 @@ package kr.ac.sejong.cedpt.cctvconsent.roster;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.LocalDate;
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.PostgresTestSupport;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterWorkbookFixture.FixtureCourse;
@@ -40,7 +39,7 @@ class CourseDeletionServiceTest extends PostgresTestSupport {
 				FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"),
 				FixtureCourse.of("000305-001", "센B202", "20010001")));
 		importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)),
-				LocalDate.of(2026, 12, 21), List.of());
+				List.of());
 		semesterId = semesters.findByYearAndTerm(2026, "2").orElseThrow().getId();
 		sign("000304-001", "20010001");
 		sign("000305-001", "20010001");

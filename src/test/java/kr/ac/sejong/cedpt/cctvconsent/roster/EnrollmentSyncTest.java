@@ -1,6 +1,7 @@
 package kr.ac.sejong.cedpt.cctvconsent.roster;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -50,8 +51,8 @@ class EnrollmentSyncTest extends PostgresTestSupport {
 				course("000306-001", "센B209")));
 
 		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
-		assertThat(semester.getEndsOn()).isEqualTo(LocalDate.of(2027, 2, 28));
-		assertThat(semester.getPurgeOn()).isEqualTo(LocalDate.of(2028, 2, 28));
+		assertThat(semester.getEndsOn()).isEqualTo(LocalDate.of(2026, 12, 31));
+		assertThat(semester.getPurgeOn()).isEqualTo(LocalDate.of(2027, 12, 31));
 		assertThat(enrollments.findBySemesterAndStudentId(semester, STUDENT))
 				.extracting(e -> e.getCourse().getCode(), Enrollment::isInSjpt, Enrollment::isInLatestRoster,
 						Enrollment::getStudentName)
@@ -73,8 +74,7 @@ class EnrollmentSyncTest extends PostgresTestSupport {
 		assertThat(mine.get("000304-001").isInSjpt()).isTrue();
 		assertThat(mine.get("000305-001").isInSjpt()).isFalse();
 		assertThat(mine.values()).allMatch(Enrollment::isInLatestRoster);
-		// 명부로 정한 학기 종료일과 과목 정보는 그대로 둔다
-		assertThat(semester.getEndsOn()).isEqualTo(LocalDate.of(2026, 12, 21));
+		// 명부로 정한 과목 정보는 그대로 둔다
 		assertThat(courses.findBySemester(semester)).allMatch(c -> c.getName().equals("과목" + c.getCode()));
 	}
 
@@ -98,14 +98,15 @@ class EnrollmentSyncTest extends PostgresTestSupport {
 	}
 
 	@Test
-	void usesFirstTermEndDate() {
-		assertThat(EnrollmentSync.defaultEndsOn(2026, "1")).isEqualTo(LocalDate.of(2026, 8, 31));
-		assertThat(EnrollmentSync.defaultEndsOn(2027, "2")).isEqualTo(LocalDate.of(2028, 2, 29));
+	void endsFirstTermInJuneAndSecondTermInDecember() {
+		assertThat(Semester.endsOn(2026, "1")).isEqualTo(LocalDate.of(2026, 6, 30));
+		assertThat(Semester.endsOn(2027, "2")).isEqualTo(LocalDate.of(2027, 12, 31));
+		assertThatThrownBy(() -> Semester.endsOn(2026, "여름")).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	private void importRoster(FixtureCourse... rosterCourses) {
 		byte[] xlsx = RosterWorkbookFixture.workbook("2026년도 2학기 출석부", 45, List.of(rosterCourses));
-		importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)), LocalDate.of(2026, 12, 21), List.of());
+		importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)), List.of());
 	}
 
 	private static EnrollmentSync.EnrolledCourse course(String code, String room) {

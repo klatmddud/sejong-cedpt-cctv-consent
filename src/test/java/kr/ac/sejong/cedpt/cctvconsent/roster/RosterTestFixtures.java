@@ -18,8 +18,11 @@ public final class RosterTestFixtures {
 	}
 
 	public static byte[] roster(List<Object> courses) {
-		return RosterWorkbookFixture.workbook(TITLE, 45,
-				courses.stream().map(FixtureCourse.class::cast).toList());
+		return roster(TITLE, courses);
+	}
+
+	public static byte[] roster(String title, List<Object> courses) {
+		return RosterWorkbookFixture.workbook(title, 45, courses.stream().map(FixtureCourse.class::cast).toList());
 	}
 
 }

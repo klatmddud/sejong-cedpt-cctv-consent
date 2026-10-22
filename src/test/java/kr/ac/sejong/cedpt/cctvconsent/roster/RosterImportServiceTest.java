@@ -45,15 +45,14 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	@Test
 	void importsOnlyTargetRoomCourses() {
-		RosterImportService.Result result = importRoster(LocalDate.of(2026, 12, 21),
-				FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"),
+		RosterImportService.Result result = importRoster(FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"),
 				FixtureCourse.of("000305-001", "호302/센B202", "20010002"),
 				FixtureCourse.of("000306-001", "센B209", "20010003"),
 				FixtureCourse.of("000307-001", null, "20010004"));
 
 		assertThat(result).isEqualTo(new RosterImportService.Result(2026, "2", 2, 3, 2, 3, 0, 0, 0));
 		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
-		assertThat(semester.getPurgeOn()).isEqualTo(LocalDate.of(2027, 12, 21));
+		assertThat(semester.getPurgeOn()).isEqualTo(LocalDate.of(2027, 12, 31));
 		assertThat(activeByCourse(semester)).containsOnly(
 				Map.entry("000304-001", List.of("20010001", "20010002")),
 				Map.entry("000305-001", List.of("20010002")));
@@ -61,17 +60,15 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	@Test
 	void reimportAddsNewStudentsAndKeepsRemovedOnes() {
-		importRoster(LocalDate.of(2026, 12, 21),
-				FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
+		importRoster(FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
 
-		RosterImportService.Result result = importRoster(LocalDate.of(2026, 12, 23),
-				FixtureCourse.of("000304-001", "센B201", "20010002", "20010009"));
+		RosterImportService.Result result = importRoster(FixtureCourse.of("000304-001", "센B201", "20010002", "20010009"));
 
 		assertThat(result.addedCount()).isEqualTo(1);
 		assertThat(result.removedCount()).isEqualTo(1);
 		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
-		assertThat(semester.getEndsOn()).isEqualTo(LocalDate.of(2026, 12, 23));
-		assertThat(semester.getPurgeOn()).isEqualTo(LocalDate.of(2027, 12, 23));
+		assertThat(semester.getEndsOn()).isEqualTo(LocalDate.of(2026, 12, 31));
+		assertThat(semester.getPurgeOn()).isEqualTo(LocalDate.of(2027, 12, 31));
 
 		Map<String, Boolean> inLatest = enrollments.findBySemester(semester).stream()
 				.collect(Collectors.toMap(Enrollment::getStudentId, Enrollment::isInLatestRoster));
@@ -84,11 +81,10 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	@Test
 	void countsReturningStudentAsAdded() {
-		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
-		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010002"));
+		importRoster(FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
+		importRoster(FixtureCourse.of("000304-001", "센B201", "20010002"));
 
-		RosterImportService.Result result = importRoster(LocalDate.of(2026, 12, 21),
-				FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
+		RosterImportService.Result result = importRoster(FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
 
 		assertThat(result.addedCount()).isEqualTo(1);
 		assertThat(result.removedCount()).isZero();
@@ -100,8 +96,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 	void deletesSjptOnlyEnrollmentMissingFromRoster() {
 		loginWith("20010001", "000304-001", "센B201");
 
-		RosterImportService.Result result = importRoster(LocalDate.of(2026, 12, 21),
-				FixtureCourse.of("000304-001", "센B201", "20010002"));
+		RosterImportService.Result result = importRoster(FixtureCourse.of("000304-001", "센B201", "20010002"));
 
 		assertThat(result.deletedCount()).isEqualTo(1);
 		assertThat(result.deletedConsentCount()).isZero();
@@ -124,7 +119,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isEqualTo(1);
 		assertThat(uploads.count()).isZero();
 
-		RosterImportService.Result result = importRoster(LocalDate.of(2026, 12, 21), deletions,
+		RosterImportService.Result result = importRoster(deletions,
 				FixtureCourse.of("000304-001", "센B201", "20010002"));
 
 		assertThat(result.deletedCount()).isEqualTo(1);
@@ -150,7 +145,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 		loginWith("20010003", "000304-001", "센B201");
 		signConsent(jdbc.queryForObject("select id from enrollment where student_id = '20010003'", Long.class));
 
-		assertThatThrownBy(() -> importRoster(LocalDate.of(2026, 12, 21), shown,
+		assertThatThrownBy(() -> importRoster(shown,
 				FixtureCourse.of("000304-001", "센B201", "20010002")))
 				.isInstanceOfSatisfying(RosterImportService.ConfirmationRequiredException.class,
 						ex -> assertThat(ex.getDeletions()).extracting(RosterImportService.ConsentDeletion::studentId)
@@ -160,12 +155,11 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	@Test
 	void neverDeletesEnrollmentThatWasInAnEarlierRoster() {
-		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
+		importRoster(FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
 		signConsent(jdbc.queryForObject("select id from enrollment where student_id = '20010001'", Long.class));
-		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010002"));
+		importRoster(FixtureCourse.of("000304-001", "센B201", "20010002"));
 
-		RosterImportService.Result result = importRoster(LocalDate.of(2026, 12, 23),
-				FixtureCourse.of("000304-001", "센B201", "20010002"));
+		RosterImportService.Result result = importRoster(FixtureCourse.of("000304-001", "센B201", "20010002"));
 
 		assertThat(result.deletedCount()).isZero();
 		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isEqualTo(1);
@@ -173,10 +167,10 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	@Test
 	void finalRosterEndsSjptConfirmationOfDroppedStudent() {
-		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
+		importRoster(FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
 		loginWith("20010001", "000304-001", "센B201");
 
-		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010002"));
+		importRoster(FixtureCourse.of("000304-001", "센B201", "20010002"));
 
 		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
 		assertThat(enrollments.findBySemesterAndStudentId(semester, "20010001")).singleElement()
@@ -192,8 +186,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 		loginWith("20010001", "000304-001", "센B201");
 		loginWith("20010003", "000400-001", "센B203");
 
-		RosterImportService.Result result = importRoster(LocalDate.of(2026, 12, 21),
-				FixtureCourse.of("000304-001", "센B201", "20010001"));
+		RosterImportService.Result result = importRoster(FixtureCourse.of("000304-001", "센B201", "20010001"));
 
 		assertThat(result.deletedCount()).isZero();
 		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
@@ -205,11 +198,10 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	@Test
 	void keepsEnrollmentFromPreviousRosterEvenIfOnlyConfirmedBySjpt() {
-		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
+		importRoster(FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
 		loginWith("20010001", "000304-001", "센B201");
 
-		RosterImportService.Result result = importRoster(LocalDate.of(2026, 12, 21),
-				FixtureCourse.of("000304-001", "센B201", "20010002"));
+		RosterImportService.Result result = importRoster(FixtureCourse.of("000304-001", "센B201", "20010002"));
 
 		assertThat(result.deletedCount()).isZero();
 		assertThat(result.removedCount()).isEqualTo(1);
@@ -221,11 +213,11 @@ class RosterImportServiceTest extends PostgresTestSupport {
 		signConsent(jdbc.queryForObject("select id from enrollment", Long.class));
 		RosterImportService.ConfirmationRequiredException held = confirmationRequired(
 				FixtureCourse.of("000304-001", "센B201", "20010001"));
-		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000400-001", "센B203", "20010003"));
+		importRoster(FixtureCourse.of("000400-001", "센B203", "20010003"));
 
 		assertThatThrownBy(() -> importService.importRoster(
 				importService.read(List.of(file("명부.xlsx", TITLE, FixtureCourse.of("000304-001", "센B201", "20010001")))),
-				LocalDate.of(2026, 12, 21), held.getDeletions(), held.getLastUploadId()))
+				held.getDeletions(), held.getLastUploadId()))
 				.isInstanceOf(RosterImportService.StaleRosterException.class);
 		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isEqualTo(1);
 	}
@@ -238,9 +230,9 @@ class RosterImportServiceTest extends PostgresTestSupport {
 		RosterImportService.ConfirmationRequiredException held = confirmationRequired(course);
 		RosterImportService.ParsedRoster roster = importService.read(List.of(file("명부.xlsx", TITLE, course)));
 
-		importService.importRoster(roster, LocalDate.of(2026, 12, 21), held.getDeletions(), held.getLastUploadId());
+		importService.importRoster(roster, held.getDeletions(), held.getLastUploadId());
 
-		assertThatThrownBy(() -> importService.importRoster(roster, LocalDate.of(2026, 12, 21), held.getDeletions(),
+		assertThatThrownBy(() -> importService.importRoster(roster, held.getDeletions(),
 				held.getLastUploadId()))
 				.isInstanceOf(RosterImportService.StaleRosterException.class);
 		assertThat(uploads.count()).isEqualTo(1);
@@ -248,9 +240,8 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	@Test
 	void separateUploadUpdatesOnlyItsOwnCourses() {
-		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
-		RosterImportService.Result second = importRoster(LocalDate.of(2026, 12, 21),
-				FixtureCourse.of("000400-001", "센B203", "20010003"));
+		importRoster(FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
+		RosterImportService.Result second = importRoster(FixtureCourse.of("000400-001", "센B203", "20010003"));
 
 		assertThat(second.removedCount()).isZero();
 		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
@@ -258,8 +249,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 				Map.entry("000304-001", List.of("20010001", "20010002")),
 				Map.entry("000400-001", List.of("20010003")));
 
-		RosterImportService.Result again = importRoster(LocalDate.of(2026, 12, 21),
-				FixtureCourse.of("000304-001", "센B201", "20010002"));
+		RosterImportService.Result again = importRoster(FixtureCourse.of("000304-001", "센B201", "20010002"));
 
 		assertThat(again.removedCount()).isEqualTo(1);
 		assertThat(activeByCourse(semester)).containsOnly(
@@ -276,7 +266,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 				file("AI융.xlsx", TITLE,
 						FixtureCourse.of("000304-001", "센B201", "20010002", "20010003"),
 						FixtureCourse.of("000400-001", "센B203", "20010004"))),
-				LocalDate.of(2026, 12, 21), List.of());
+				List.of());
 
 		assertThat(result).isEqualTo(new RosterImportService.Result(2026, "2", 3, 5, 4, 5, 0, 0, 0));
 		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
@@ -293,27 +283,35 @@ class RosterImportServiceTest extends PostgresTestSupport {
 		assertThatThrownBy(() -> importService.importRoster(List.of(
 				file("소융.xlsx", TITLE, FixtureCourse.of("000304-001", "센B201", "20010001")),
 				file("AI융.xlsx", "2026년도 1학기 출석부", FixtureCourse.of("000400-001", "센B203", "20010004"))),
-				LocalDate.of(2026, 12, 21), List.of()))
+				List.of()))
 				.isInstanceOf(RosterParseException.class);
 		assertThat(semesters.count()).isZero();
 	}
 
 	@Test
+	void rejectsTermOtherThanFirstAndSecond() {
+		assertThatThrownBy(() -> importService.importRoster(
+				List.of(file("명부.xlsx", "2026년도 여름학기 출석부", FixtureCourse.of("000304-001", "센B201", "20010001"))),
+				List.of()))
+				.isInstanceOf(RosterParseException.class)
+				.hasMessageContaining("1학기, 2학기");
+		assertThat(semesters.count()).isZero();
+	}
+
+	@Test
 	void rejectsRosterWithoutTargetRooms() {
-		assertThatThrownBy(() -> importRoster(LocalDate.of(2026, 12, 21),
-				FixtureCourse.of("000306-001", "센B209", "20010003")))
+		assertThatThrownBy(() -> importRoster(FixtureCourse.of("000306-001", "센B209", "20010003")))
 				.isInstanceOf(RosterParseException.class);
 		assertThat(semesters.count()).isZero();
 	}
 
-	private RosterImportService.Result importRoster(LocalDate endsOn, FixtureCourse... courses) {
-		return importRoster(endsOn, List.of(), courses);
+	private RosterImportService.Result importRoster(FixtureCourse... courses) {
+		return importRoster(List.of(), courses);
 	}
 
-	private RosterImportService.Result importRoster(LocalDate endsOn,
-			List<RosterImportService.ConsentDeletion> confirmed, FixtureCourse... courses) {
+	private RosterImportService.Result importRoster(List<RosterImportService.ConsentDeletion> confirmed, FixtureCourse... courses) {
 		byte[] xlsx = RosterWorkbookFixture.workbook(TITLE, 45, List.of(courses));
-		return importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)), endsOn, confirmed);
+		return importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)), confirmed);
 	}
 
 	private static RosterImportService.UploadedFile file(String name, String title, FixtureCourse... courses) {
@@ -322,7 +320,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	private RosterImportService.ConfirmationRequiredException confirmationRequired(FixtureCourse... courses) {
 		try {
-			importRoster(LocalDate.of(2026, 12, 21), courses);
+			importRoster(courses);
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
 			return ex;
@@ -332,7 +330,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	private List<RosterImportService.ConsentDeletion> confirmationFor(FixtureCourse... courses) {
 		try {
-			importRoster(LocalDate.of(2026, 12, 21), courses);
+			importRoster(courses);
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
 			return ex.getDeletions();

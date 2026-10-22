@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.PostgresTestSupport;
 import kr.ac.sejong.cedpt.cctvconsent.auth.SejongAuthException;
@@ -72,11 +73,14 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	@BeforeEach
 	void setUp() {
 		jdbc.execute("TRUNCATE semester CASCADE");
-		byte[] roster = RosterTestFixtures.roster(List.of(
+		// 학기 종료일이 지나지 않아야 학생이 동의할 수 있으므로 지금 학기 명부로 만든다
+		LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+		String title = today.getYear() + "년도 " + (today.getMonthValue() <= 6 ? 1 : 2) + "학기 출석부";
+		byte[] roster = RosterTestFixtures.roster(title, List.of(
 				RosterTestFixtures.course("000304-001", "센B201", STUDENT, OTHER),
 				RosterTestFixtures.course("000305-001", "센B206", STUDENT),
 				RosterTestFixtures.course("000306-001", "센B209", STUDENT)));
-		rosterImport.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", roster)), LocalDate.now().plusMonths(3), List.of());
+		rosterImport.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", roster)), List.of());
 	}
 
 	@Test

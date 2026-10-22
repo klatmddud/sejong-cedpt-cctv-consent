@@ -113,11 +113,10 @@ public class RosterImportService {
 		return new ParsedRoster(files.stream().map(UploadedFile::name).collect(Collectors.joining(", ")), merge(files));
 	}
 
-	/** 파일을 읽어 바로 반영한다. {@link #importRoster(ParsedRoster, LocalDate, Collection)}와 같다. */
+	/** 파일을 읽어 바로 반영한다. {@link #importRoster(ParsedRoster, Collection)}와 같다. */
 	@Transactional
-	public Result importRoster(List<UploadedFile> files, LocalDate semesterEndsOn,
-			Collection<ConsentDeletion> confirmedDeletions) {
-		return doImport(read(files), semesterEndsOn, confirmedDeletions, false, null);
+	public Result importRoster(List<UploadedFile> files, Collection<ConsentDeletion> confirmedDeletions) {
+		return doImport(read(files), confirmedDeletions, false, null);
 	}
 
 	/**
@@ -127,9 +126,8 @@ public class RosterImportService {
 	 * @throws ConfirmationRequiredException 삭제할 동의서 중 확인하지 않은 것이 있음
 	 */
 	@Transactional
-	public Result importRoster(ParsedRoster roster, LocalDate semesterEndsOn,
-			Collection<ConsentDeletion> confirmedDeletions) {
-		return doImport(roster, semesterEndsOn, confirmedDeletions, false, null);
+	public Result importRoster(ParsedRoster roster, Collection<ConsentDeletion> confirmedDeletions) {
+		return doImport(roster, confirmedDeletions, false, null);
 	}
 
 	/**
@@ -139,13 +137,13 @@ public class RosterImportService {
 	 * @throws StaleRosterException 그 뒤 같은 학기에 다른 명부가 반영됨(같은 확인을 두 번 보낸 경우 포함)
 	 */
 	@Transactional
-	public Result importRoster(ParsedRoster roster, LocalDate semesterEndsOn,
-			Collection<ConsentDeletion> confirmedDeletions, Long expectedLastUploadId) {
-		return doImport(roster, semesterEndsOn, confirmedDeletions, true, expectedLastUploadId);
+	public Result importRoster(ParsedRoster roster, Collection<ConsentDeletion> confirmedDeletions,
+			Long expectedLastUploadId) {
+		return doImport(roster, confirmedDeletions, true, expectedLastUploadId);
 	}
 
-	private Result doImport(ParsedRoster parsed, LocalDate semesterEndsOn,
-			Collection<ConsentDeletion> confirmedDeletions, boolean confirming, Long expectedLastUploadId) {
+	private Result doImport(ParsedRoster parsed, Collection<ConsentDeletion> confirmedDeletions, boolean confirming,
+			Long expectedLastUploadId) {
 		RosterFile roster = parsed.roster();
 		List<RosterFile.Course> targets = roster.courses().stream()
 				.filter(course -> targetRooms.includes(course.room()))
@@ -155,13 +153,15 @@ public class RosterImportService {
 		}
 
 		// 같은 학기 첫 학생 로그인이 동시에 학기를 만들어도 충돌하지 않도록 EnrollmentSync와 같은 방식으로 만든다
-		semesters.insertIfAbsent(roster.year(), roster.term(), semesterEndsOn, semesterEndsOn.plusYears(1));
+		LocalDate endsOn = Semester.endsOn(roster.year(), roster.term());
+		semesters.insertIfAbsent(roster.year(), roster.term(), endsOn, endsOn.plusYears(1));
 		Semester semester = semesters.findForUpdate(roster.year(), roster.term()).orElseThrow();
 		Long lastUploadId = uploads.findTopBySemesterOrderByIdDesc(semester).map(RosterUpload::getId).orElse(null);
 		if (confirming && !Objects.equals(lastUploadId, expectedLastUploadId)) {
 			throw new StaleRosterException();
 		}
-		semester.changeEndsOn(semesterEndsOn);
+		// 예전에 관리자가 입력한 종료일이 남은 학기도 규칙대로 맞춘다
+		semester.changeEndsOn(endsOn);
 
 		Map<String, Course> courseByCode = courses.findBySemester(semester).stream()
 				.collect(Collectors.toMap(Course::getCode, Function.identity()));
@@ -271,6 +271,9 @@ public class RosterImportService {
 			}
 		}
 		RosterFile first = parsed.get(0);
+		if (!first.term().equals("1") && !first.term().equals("2")) {
+			throw new RosterParseException("1학기, 2학기 명부만 올릴 수 있습니다: " + first.year() + "년도 " + first.term() + "학기");
+		}
 		Map<String, RosterFile.Course> byCode = new LinkedHashMap<>();
 		for (RosterFile file : parsed) {
 			if (file.year() != first.year() || !file.term().equals(first.term())) {

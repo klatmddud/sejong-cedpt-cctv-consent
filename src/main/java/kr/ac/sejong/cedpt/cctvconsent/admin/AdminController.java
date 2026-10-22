@@ -3,7 +3,6 @@ package kr.ac.sejong.cedpt.cctvconsent.admin;
 import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.io.Serializable;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.roster.CourseDeletionService;
@@ -11,7 +10,6 @@ import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterParseException;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.TargetRooms;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.web.WebAttributes;
@@ -37,11 +35,11 @@ class AdminController {
 	 *
 	 * @param lastUploadId 확인 화면을 보여 줄 때 이 학기에 마지막으로 반영된 업로드(그 뒤 다른 명부가 반영되면 거절)
 	 */
-	record PendingRoster(RosterImportService.ParsedRoster roster, LocalDate endsOn,
-			List<RosterImportService.ConsentDeletion> deletions, Long lastUploadId) implements Serializable {
+	record PendingRoster(RosterImportService.ParsedRoster roster, List<RosterImportService.ConsentDeletion> deletions,
+			Long lastUploadId) implements Serializable {
 
 		PendingRoster withConfirmation(RosterImportService.ConfirmationRequiredException ex) {
-			return new PendingRoster(roster, endsOn, ex.getDeletions(), ex.getLastUploadId());
+			return new PendingRoster(roster, ex.getDeletions(), ex.getLastUploadId());
 		}
 
 	}
@@ -129,9 +127,8 @@ class AdminController {
 	}
 
 	@PostMapping("/roster")
-	String uploadRoster(@RequestParam("file") List<MultipartFile> uploaded,
-			@RequestParam("endsOn") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endsOn,
-			HttpSession session, RedirectAttributes redirect) {
+	String uploadRoster(@RequestParam("file") List<MultipartFile> uploaded, HttpSession session,
+			RedirectAttributes redirect) {
 		session.removeAttribute(PENDING_ROSTER);
 		List<RosterImportService.UploadedFile> files = new ArrayList<>();
 		for (MultipartFile file : uploaded) {
@@ -161,11 +158,11 @@ class AdminController {
 			return "redirect:/admin/roster";
 		}
 		try {
-			redirect.addFlashAttribute("result", importService.importRoster(roster, endsOn, List.of()));
+			redirect.addFlashAttribute("result", importService.importRoster(roster, List.of()));
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
 			session.setAttribute(PENDING_ROSTER,
-					new PendingRoster(roster, endsOn, ex.getDeletions(), ex.getLastUploadId()));
+					new PendingRoster(roster, ex.getDeletions(), ex.getLastUploadId()));
 		}
 		catch (RosterParseException ex) {
 			redirect.addFlashAttribute("error", ex.getMessage());
@@ -191,8 +188,8 @@ class AdminController {
 			return "redirect:/admin/roster";
 		}
 		try {
-			redirect.addFlashAttribute("result", importService.importRoster(pending.roster(), pending.endsOn(),
-					pending.deletions(), pending.lastUploadId()));
+			redirect.addFlashAttribute("result", importService.importRoster(pending.roster(), pending.deletions(),
+					pending.lastUploadId()));
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
 			session.setAttribute(PENDING_ROSTER, pending.withConfirmation(ex));

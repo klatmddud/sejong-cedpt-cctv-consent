@@ -83,7 +83,7 @@ class AdminControllerTest extends PostgresTestSupport {
 				RosterTestFixtures.course("000304-001", "센B201", "20010001", "20010002"),
 				RosterTestFixtures.course("000305-001", "센B209", "20010003"))));
 
-		mvc.perform(multipart("/admin/roster").file(file).param("endsOn", "2026-12-21")
+		mvc.perform(multipart("/admin/roster").file(file)
 						.with(user("admin").roles("ADMIN")).with(csrf()))
 				.andExpect(redirectedUrl("/admin/roster"))
 				.andExpect(flash().attributeExists("result"));
@@ -91,7 +91,7 @@ class AdminControllerTest extends PostgresTestSupport {
 		mvc.perform(get("/admin").with(user("admin").roles("ADMIN")))
 				.andExpect(status().isOk())
 				.andExpect(content().string(Matchers.containsString("2026-2학기")))
-				.andExpect(content().string(Matchers.containsString("2027-12-21")));
+				.andExpect(content().string(Matchers.containsString("2027-12-31")));
 	}
 
 	@Test
@@ -99,7 +99,7 @@ class AdminControllerTest extends PostgresTestSupport {
 		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, RosterTestFixtures.roster(List.of(
 				RosterTestFixtures.course("000304-001", "센B201", "20010001", "20010002"),
 				RosterTestFixtures.course("000400-001", "센B203", "20010003"))));
-		mvc.perform(multipart("/admin/roster").file(file).param("endsOn", "2026-12-21")
+		mvc.perform(multipart("/admin/roster").file(file)
 				.with(user("admin").roles("ADMIN")).with(csrf()));
 		long semesterId = jdbc.queryForObject("select id from semester", Long.class);
 
@@ -123,7 +123,7 @@ class AdminControllerTest extends PostgresTestSupport {
 		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, RosterTestFixtures.roster(List.of(
 				RosterTestFixtures.course("000304-001", "센B201", "20010001"),
 				RosterTestFixtures.course("000400-001", "센B203", "20010003"))));
-		mvc.perform(multipart("/admin/roster").file(file).param("endsOn", "2026-12-21")
+		mvc.perform(multipart("/admin/roster").file(file)
 				.with(user("admin").roles("ADMIN")).with(csrf()));
 		long semesterId = jdbc.queryForObject("select id from semester", Long.class);
 
@@ -150,7 +150,7 @@ class AdminControllerTest extends PostgresTestSupport {
 		MockMultipartFile second = new MockMultipartFile("file", "AI융.xlsx", null, RosterTestFixtures.roster(List.of(
 				RosterTestFixtures.course("000400-001", "센B203", "20010002"))));
 
-		mvc.perform(multipart("/admin/roster").file(first).file(second).param("endsOn", "2026-12-21")
+		mvc.perform(multipart("/admin/roster").file(first).file(second)
 						.with(user("admin").roles("ADMIN")).with(csrf()))
 				.andExpect(redirectedUrl("/admin/roster"))
 				.andExpect(result -> assertThat(((RosterImportService.Result) result.getFlashMap().get("result"))
@@ -171,7 +171,7 @@ class AdminControllerTest extends PostgresTestSupport {
 				RosterTestFixtures.course("000304-001", "센B201", "20010001"))));
 		MockHttpSession session = new MockHttpSession();
 
-		mvc.perform(multipart("/admin/roster").file(file).param("endsOn", "2026-12-21").session(session)
+		mvc.perform(multipart("/admin/roster").file(file).session(session)
 						.with(user("admin").roles("ADMIN")).with(csrf()))
 				.andExpect(redirectedUrl("/admin/roster"))
 				.andExpect(flash().attributeCount(0));
@@ -211,7 +211,7 @@ class AdminControllerTest extends PostgresTestSupport {
 	void showsParseErrorForInvalidRoster() throws Exception {
 		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, "not xlsx".getBytes());
 
-		mvc.perform(multipart("/admin/roster").file(file).param("endsOn", "2026-12-21")
+		mvc.perform(multipart("/admin/roster").file(file)
 						.with(user("admin").roles("ADMIN")).with(csrf()))
 				.andExpect(redirectedUrl("/admin/roster"))
 				.andExpect(flash().attribute("error", Matchers.containsString("xlsx")));
@@ -221,7 +221,7 @@ class AdminControllerTest extends PostgresTestSupport {
 	void rejectsUploadWithoutCsrfToken() throws Exception {
 		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, new byte[] {1});
 
-		mvc.perform(multipart("/admin/roster").file(file).param("endsOn", "2026-12-21")
+		mvc.perform(multipart("/admin/roster").file(file)
 						.with(user("admin").roles("ADMIN")))
 				.andExpect(status().isForbidden());
 	}

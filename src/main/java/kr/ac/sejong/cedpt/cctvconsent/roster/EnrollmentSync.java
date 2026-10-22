@@ -1,7 +1,6 @@
 package kr.ac.sejong.cedpt.cctvconsent.roster;
 
 import java.time.LocalDate;
-import java.time.YearMonth;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * sjpt에 있는 수강은 inSjpt=true, 이 학생의 같은 학기 수강 중 sjpt에 없는 것은 inSjpt=false로 표시한다.
  * 명부 값(inLatestRoster)은 건드리지 않고, 수강 행을 지우지 않으므로 이미 받은 동의는 유지된다.
- * 명부에 없는 학기면 기본 종료일로 학기를 만든다. 나중에 명부를 올리면 관리자가 넣은 종료일로 바뀐다.
+ * 명부에 없는 학기면 학기를 만든다(종료일은 Semester.endsOn).
  * 명부 업로드가 학기 행을 잠그고 있으면 3초까지만 기다린다. 로그인이 DB 연결을 오래 잡아 두지 않게 하기 위해서이며,
  * 시간을 넘기면 예외가 나고 학생은 이전 수강 정보로 보게 된다.
  */
@@ -61,7 +60,7 @@ public class EnrollmentSync {
 
 		// 이 트랜잭션에만 적용된다
 		jdbc.execute("SET LOCAL lock_timeout = '3s'");
-		LocalDate endsOn = defaultEndsOn(year, term);
+		LocalDate endsOn = Semester.endsOn(year, term);
 		semesters.insertIfAbsent(year, term, endsOn, endsOn.plusYears(1));
 		Semester semester = semesters.findForUpdate(year, term).orElseThrow();
 
@@ -90,11 +89,6 @@ public class EnrollmentSync {
 				enrollment.markNotInSjpt();
 			}
 		});
-	}
-
-	/** 명부가 아직 없을 때 쓰는 학기 종료일: 1학기 8월 31일, 2학기 다음 해 2월 말일. */
-	static LocalDate defaultEndsOn(int year, String term) {
-		return "1".equals(term) ? LocalDate.of(year, 8, 31) : YearMonth.of(year + 1, 2).atEndOfMonth();
 	}
 
 }

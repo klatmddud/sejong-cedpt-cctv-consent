@@ -3,7 +3,6 @@ package kr.ac.sejong.cedpt.cctvconsent.roster;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.DayOfWeek;
-import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.PostgresTestSupport;
@@ -40,7 +39,7 @@ class RosterQueryServiceTest extends PostgresTestSupport {
 				FixtureCourse.of("000304-001", "센B201", "20010002", "20010001", "20010003"),
 				FixtureCourse.of("000305-001", "센B202", "20010001")));
 		importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)),
-				LocalDate.of(2026, 12, 21), List.of());
+				List.of());
 		sign("000304-001", "20010001");
 		sign("000305-001", "20010001");
 		// 명부에서 빠진 학생은 수강 중이 아니므로 미제출로 세지 않는다
