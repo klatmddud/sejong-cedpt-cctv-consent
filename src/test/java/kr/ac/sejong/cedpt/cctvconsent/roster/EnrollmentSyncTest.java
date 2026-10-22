@@ -79,6 +79,18 @@ class EnrollmentSyncTest extends PostgresTestSupport {
 	}
 
 	@Test
+	void fitsLongSjptValuesAndSkipsOverlongCode() {
+		String professors = String.join(", ", java.util.Collections.nCopies(30, "김교수"));
+		sync.sync(STUDENT, "홍길동", 2026, "2", List.of(
+				new EnrollmentSync.EnrolledCourse("000304-001", "과목", professors, "월10:30-12:00", "센B201"),
+				new EnrollmentSync.EnrolledCourse("000304-001-EXTRA-LONG", "과목", "김교수", "월10:30-12:00", "센B201")));
+
+		Semester semester = semesters.findByYearAndTerm(2026, "2").orElseThrow();
+		assertThat(courses.findBySemester(semester)).singleElement()
+				.satisfies(course -> assertThat(course.getProfessor()).hasSize(100));
+	}
+
+	@Test
 	void doesNotCreateSemesterWithoutTargetCourses() {
 		sync.sync(STUDENT, "홍길동", 2026, "2", List.of(course("000306-001", "센B209")));
 

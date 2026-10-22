@@ -188,6 +188,12 @@ class AdminControllerTest extends PostgresTestSupport {
 		assertThat(jdbc.queryForObject("select count(*) from enrollment where student_id = '20010009'", Integer.class))
 				.isZero();
 		assertThat(session.getAttribute("pendingRoster")).isNull();
+
+		// 확인을 두 번 보내도 한 번만 반영된다
+		mvc.perform(post("/admin/roster/confirm").session(session).with(user("admin").roles("ADMIN")).with(csrf()))
+				.andExpect(redirectedUrl("/admin/roster"))
+				.andExpect(flash().attribute("error", Matchers.containsString("확인할 업로드가 없습니다")));
+		assertThat(jdbc.queryForObject("select count(*) from roster_upload", Integer.class)).isEqualTo(1);
 	}
 
 	@Test

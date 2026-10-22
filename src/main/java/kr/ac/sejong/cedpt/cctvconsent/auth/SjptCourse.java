@@ -35,15 +35,17 @@ public record SjptCourse(
 		String organization) {
 
 	// 시간표 한 칸: 요일시간(교수/강의실). 칸이 여러 개면 쉼표 등으로 이어진다고 보고, 괄호 단위로 읽는다.
-	private static final Pattern SLOT = Pattern.compile("([^(),]*)\\(([^()]*)\\)");
+	// 같은 교수, 강의실이면 "월10:30-12:00,수10:30-12:00(교수/강의실)"처럼 시간 여러 개가 괄호 하나를 같이 쓸 수 있다.
+	private static final Pattern SLOT = Pattern.compile("([^()]*)\\(([^()]*)\\)");
+	private static final Pattern TIME_SEPARATOR = Pattern.compile("[,\\s]+");
 
-	private record Slot(String time, List<String> professors, String room) {
+	private record Slot(List<String> times, List<String> professors, String room) {
 	}
 
 	/** 요일과 시간만, 예: "목15:00-18:00". 시간표 형식을 읽지 못하면 원문 그대로. */
 	public String times() {
 		List<Slot> slots = slots();
-		return slots.isEmpty() ? schedule : join(slots, slot -> List.of(slot.time()), " ");
+		return slots.isEmpty() ? schedule : join(slots, Slot::times, " ");
 	}
 
 	/** 교수명, 여러 명이면 ", "로 잇는다. */
@@ -68,7 +70,8 @@ public record SjptCourse(
 			for (int i = 0; i < parts.length - 1; i++) {
 				professors.add(parts[i].trim());
 			}
-			slots.add(new Slot(matcher.group(1).trim(), professors, parts[parts.length - 1].trim()));
+			List<String> times = TIME_SEPARATOR.splitAsStream(matcher.group(1)).filter(time -> !time.isEmpty()).toList();
+			slots.add(new Slot(times, professors, parts[parts.length - 1].trim()));
 		}
 		return slots;
 	}

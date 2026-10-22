@@ -2,6 +2,7 @@ package kr.ac.sejong.cedpt.cctvconsent.roster;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,6 +28,8 @@ public class EnrollmentSync {
 	public record EnrolledCourse(String code, String name, String professor, String schedule, String room) {
 	}
 
+	private static final int MAX_CODE_LENGTH = 20;
+
 	private final SemesterRepository semesters;
 	private final CourseRepository courses;
 	private final EnrollmentRepository enrollments;
@@ -49,6 +52,8 @@ public class EnrollmentSync {
 	public void sync(String studentId, String studentName, int year, String term, List<EnrolledCourse> enrolled) {
 		Map<String, EnrolledCourse> targets = enrolled.stream()
 				.filter(course -> targetRooms.includes(course.room()))
+				// 학수번호는 과목을 찾는 키라 자를 수 없다. 칸(20자)에 맞지 않는 것은 형식이 다른 값으로 보고 뺀다
+				.filter(course -> course.code() != null && course.code().length() <= MAX_CODE_LENGTH)
 				.collect(Collectors.toMap(EnrolledCourse::code, Function.identity(), (first, second) -> first));
 		if (targets.isEmpty() && semesters.findByYearAndTerm(year, term).isEmpty()) {
 			return;
@@ -60,8 +65,10 @@ public class EnrollmentSync {
 		semesters.insertIfAbsent(year, term, endsOn, endsOn.plusYears(1));
 		Semester semester = semesters.findForUpdate(year, term).orElseThrow();
 
-		Map<String, Course> courseByCode = courses.findBySemester(semester).stream()
-				.collect(Collectors.toMap(Course::getCode, Function.identity()));
+		// 학기 과목 전체가 아니라 이 학생이 듣는 과목만 읽는다(학기 행을 잠근 채로 도는 로그인 경로)
+		Map<String, Course> courseByCode = targets.isEmpty() ? new HashMap<>()
+				: courses.findBySemesterAndCodeIn(semester, targets.keySet()).stream()
+						.collect(Collectors.toMap(Course::getCode, Function.identity()));
 		Map<String, Enrollment> mine = enrollments.findBySemesterAndStudentId(semester, studentId).stream()
 				.collect(Collectors.toMap(enrollment -> enrollment.getCourse().getCode(), Function.identity()));
 

@@ -37,6 +37,8 @@ interface CourseRepository extends JpaRepository<Course, Long> {
 
 	Optional<Course> findBySemesterAndCode(Semester semester, String code);
 
+	List<Course> findBySemesterAndCodeIn(Semester semester, Collection<String> codes);
+
 	/** 수강, 동의서는 DB의 ON DELETE CASCADE로 지운다. 이미 읽은 수강 엔티티가 남지 않도록 영속성 컨텍스트를 비운다. */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("delete from Course c where c.id = :id")
@@ -99,5 +101,7 @@ interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 interface RosterUploadRepository extends JpaRepository<RosterUpload, Long> {
 
 	List<RosterUpload> findTop10ByOrderByUploadedAtDesc();
+
+	Optional<RosterUpload> findTopBySemesterOrderByIdDesc(Semester semester);
 
 }

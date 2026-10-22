@@ -6,11 +6,11 @@ import java.io.Serializable;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 import kr.ac.sejong.cedpt.cctvconsent.roster.CourseDeletionService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterParseException;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService;
+import kr.ac.sejong.cedpt.cctvconsent.roster.TargetRooms;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.LockedException;
@@ -25,14 +25,25 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.util.WebUtils;
 
 @Controller
 @RequestMapping("/admin")
 class AdminController {
 
-	/** 동의서 삭제 확인을 기다리는 업로드. 확인하면 같은 파일로 다시 반영한다. */
-	record PendingRoster(String fileName, List<RosterImportService.UploadedFile> files, LocalDate endsOn,
-			List<RosterImportService.ConsentDeletion> deletions) implements Serializable {
+	/**
+	 * 동의서 삭제 확인을 기다리는 업로드. 확인하면 같은 명부로 다시 반영한다.
+	 * 세션에는 원본 파일(수 MB) 대신 읽고 합친 명부를 둔다.
+	 *
+	 * @param lastUploadId 확인 화면을 보여 줄 때 이 학기에 마지막으로 반영된 업로드(그 뒤 다른 명부가 반영되면 거절)
+	 */
+	record PendingRoster(RosterImportService.ParsedRoster roster, LocalDate endsOn,
+			List<RosterImportService.ConsentDeletion> deletions, Long lastUploadId) implements Serializable {
+
+		PendingRoster withConfirmation(RosterImportService.ConfirmationRequiredException ex) {
+			return new PendingRoster(roster, endsOn, ex.getDeletions(), ex.getLastUploadId());
+		}
+
 	}
 
 	private static final String PENDING_ROSTER = "pendingRoster";
@@ -40,12 +51,14 @@ class AdminController {
 	private final RosterImportService importService;
 	private final RosterQueryService queries;
 	private final CourseDeletionService courseDeletion;
+	private final TargetRooms targetRooms;
 
 	AdminController(RosterImportService importService, RosterQueryService queries,
-			CourseDeletionService courseDeletion) {
+			CourseDeletionService courseDeletion, TargetRooms targetRooms) {
 		this.importService = importService;
 		this.queries = queries;
 		this.courseDeletion = courseDeletion;
+		this.targetRooms = targetRooms;
 	}
 
 	@GetMapping("/login")
@@ -75,7 +88,7 @@ class AdminController {
 		model.addAttribute("semester", queries.semester(id)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND)));
 		model.addAttribute("timetable", "timetable".equals(view));
-		model.addAttribute("page", SemesterPage.of(queries.courses(id), room));
+		model.addAttribute("page", SemesterPage.of(queries.courses(id), room, targetRooms::matching));
 		return "admin/semester";
 	}
 
@@ -139,13 +152,20 @@ class AdminController {
 			redirect.addFlashAttribute("error", "수강명부 xlsx 파일을 선택하세요.");
 			return "redirect:/admin/roster";
 		}
+		RosterImportService.ParsedRoster roster;
 		try {
-			redirect.addFlashAttribute("result", importService.importRoster(files, endsOn, List.of()));
+			roster = importService.read(files);
+		}
+		catch (RosterParseException ex) {
+			redirect.addFlashAttribute("error", ex.getMessage());
+			return "redirect:/admin/roster";
+		}
+		try {
+			redirect.addFlashAttribute("result", importService.importRoster(roster, endsOn, List.of()));
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
-			String fileNames = files.stream().map(RosterImportService.UploadedFile::name)
-					.collect(Collectors.joining(", "));
-			session.setAttribute(PENDING_ROSTER, new PendingRoster(fileNames, files, endsOn, ex.getDeletions()));
+			session.setAttribute(PENDING_ROSTER,
+					new PendingRoster(roster, endsOn, ex.getDeletions(), ex.getLastUploadId()));
 		}
 		catch (RosterParseException ex) {
 			redirect.addFlashAttribute("error", ex.getMessage());
@@ -156,26 +176,35 @@ class AdminController {
 	/**
 	 * 명부에 없는 수강의 동의서 삭제를 확인하고 보류한 명부를 반영한다.
 	 * 확인 화면 이후 삭제 대상 동의서가 늘었으면 반영하지 않고 새 목록으로 다시 확인받는다.
+	 * 그 사이 같은 학기에 다른 명부가 반영됐으면(다른 관리자, 같은 확인을 두 번 보냄) 반영하지 않는다.
 	 */
 	@PostMapping("/roster/confirm")
 	String confirmRoster(HttpSession session, RedirectAttributes redirect) {
-		if (!(session.getAttribute(PENDING_ROSTER) instanceof PendingRoster pending)) {
+		// 확인을 두 번 보내도 한 번만 반영되도록 보류한 명부를 먼저 꺼낸다
+		PendingRoster pending;
+		synchronized (WebUtils.getSessionMutex(session)) {
+			pending = session.getAttribute(PENDING_ROSTER) instanceof PendingRoster held ? held : null;
+			session.removeAttribute(PENDING_ROSTER);
+		}
+		if (pending == null) {
 			redirect.addFlashAttribute("error", "확인할 업로드가 없습니다. 명부를 다시 올려 주세요.");
 			return "redirect:/admin/roster";
 		}
 		try {
-			redirect.addFlashAttribute("result", importService.importRoster(pending.files(), pending.endsOn(),
-					pending.deletions()));
-			session.removeAttribute(PENDING_ROSTER);
+			redirect.addFlashAttribute("result", importService.importRoster(pending.roster(), pending.endsOn(),
+					pending.deletions(), pending.lastUploadId()));
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
-			session.setAttribute(PENDING_ROSTER,
-					new PendingRoster(pending.fileName(), pending.files(), pending.endsOn(), ex.getDeletions()));
+			session.setAttribute(PENDING_ROSTER, pending.withConfirmation(ex));
 			redirect.addFlashAttribute("error", "확인하는 사이 삭제될 동의서가 바뀌었습니다. 목록을 다시 확인하세요.");
 		}
-		catch (RosterParseException ex) {
-			session.removeAttribute(PENDING_ROSTER);
+		catch (RosterImportService.StaleRosterException | RosterParseException ex) {
 			redirect.addFlashAttribute("error", ex.getMessage());
+		}
+		catch (RuntimeException ex) {
+			// 예상하지 못한 오류면 다시 확인할 수 있도록 되돌려 놓는다
+			session.setAttribute(PENDING_ROSTER, pending);
+			throw ex;
 		}
 		return "redirect:/admin/roster";
 	}

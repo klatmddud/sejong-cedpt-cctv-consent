@@ -101,76 +101,74 @@
 	</section>
 </main>
 
-<th:block th:each="group : ${page.groups}">
-	<dialog class="course-detail" th:each="course : ${group.courses}" th:id="|course-${course.code}|"
-			th:attr="aria-label=|${course.name} 상세|">
-		<div class="course-detail-body">
-			<div class="course-detail-head">
-				<div>
-					<span class="muted small" th:text="|${course.room} · ${course.code}|">센B201 · 000304-001</span>
-					<h3 th:text="${course.name}">공업수학1</h3>
-				</div>
-				<form method="dialog">
-					<button type="submit" class="icon-button" aria-label="닫기">
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-							 stroke-linecap="round" aria-hidden="true">
-							<path d="M6 6l12 12M18 6L6 18"></path>
-						</svg>
-					</button>
-				</form>
+<dialog class="course-detail" th:each="course : ${page.courses}" th:id="|course-${course.code}|"
+		th:attr="aria-label=|${course.name} 상세|">
+	<div class="course-detail-body">
+		<div class="course-detail-head">
+			<div>
+				<span class="muted small" th:text="|${course.room} · ${course.code}|">센B201 · 000304-001</span>
+				<h3 th:text="${course.name}">공업수학1</h3>
 			</div>
-			<dl class="course-detail-fields">
-				<dt>강의실</dt>
-				<dd th:text="${course.room}">센B201</dd>
-				<dt>학수번호</dt>
-				<dd class="tabular" th:text="${course.code}">000304-001</dd>
-				<dt>과목명</dt>
-				<dd th:text="${course.name}">공업수학1</dd>
-				<dt>담당교수</dt>
-				<dd th:text="${course.professor}">홍길동</dd>
-				<dt>강의시간</dt>
-				<dd class="tabular" th:text="${course.schedule}">월10:30-12:00</dd>
-				<dt>학생</dt>
-				<dd th:text="|${course.studentCount}명|">19명</dd>
-				<dt>미제출 학생</dt>
-				<dd><span th:classappend="${course.unsubmittedCount() > 0} ? 'unsubmitted' : 'muted'"
-						  th:text="|${course.unsubmittedCount()}명|">7명</span></dd>
-			</dl>
-			<h4>미제출 학생 명단</h4>
-			<p class="alert ok" th:if="${#lists.isEmpty(course.unsubmitted)}">모든 학생이 동의서를 제출했습니다.</p>
-			<div class="student-list" th:unless="${#lists.isEmpty(course.unsubmitted)}">
-				<div class="student-cols student-list-head">
-					<span>#</span>
-					<span>학번</span>
-					<span>이름</span>
-				</div>
-				<div class="student-cols" th:each="student, stat : ${course.unsubmitted}">
-					<span class="muted tabular" th:text="${stat.count}">1</span>
-					<span class="tabular" th:text="${student.studentId}">20010001</span>
-					<span th:text="${student.name}">홍길동</span>
-				</div>
-			</div>
-
-			<details class="danger-zone">
-				<summary>과목 삭제</summary>
-				<p th:text="|이 과목과 수강 ${course.enrollmentCount}건, 받은 동의서 ${course.consentCount}건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.|">
-					이 과목과 수강 19건, 받은 동의서 12건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.
-				</p>
-				<p class="muted small">폐강 등으로 명부에서 빠진 과목을 정리할 때 쓰세요. 이 과목이 든 명부를 다시 올리거나, 학생 시간표(SJPT)에 이 과목이 남아 있으면 다시 생깁니다.</p>
-				<form method="post" th:action="@{/admin/semesters/{id}/courses/delete(id=${semester.id})}">
-					<input type="hidden" name="code" th:value="${course.code}">
-					<input type="hidden" name="consentCount" th:value="${course.consentCount}">
-					<input type="hidden" name="view" th:value="${timetable} ? 'timetable' : 'list'">
-					<input type="hidden" name="room" th:value="${page.room}">
-					<label><span>확인을 위해 학수번호 <strong th:text="${course.code}">000304-001</strong>을(를) 입력하세요</span>
-						<input type="text" name="confirmCode" autocomplete="off" required>
-					</label>
-					<button type="submit" class="danger">과목 삭제</button>
-				</form>
-			</details>
+			<form method="dialog">
+				<button type="submit" class="icon-button" aria-label="닫기">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+						 stroke-linecap="round" aria-hidden="true">
+						<path d="M6 6l12 12M18 6L6 18"></path>
+					</svg>
+				</button>
+			</form>
 		</div>
-	</dialog>
-</th:block>
+		<dl class="course-detail-fields">
+			<dt>강의실</dt>
+			<dd th:text="${course.room}">센B201</dd>
+			<dt>학수번호</dt>
+			<dd class="tabular" th:text="${course.code}">000304-001</dd>
+			<dt>과목명</dt>
+			<dd th:text="${course.name}">공업수학1</dd>
+			<dt>담당교수</dt>
+			<dd th:text="${course.professor}">홍길동</dd>
+			<dt>강의시간</dt>
+			<dd class="tabular" th:text="${course.schedule}">월10:30-12:00</dd>
+			<dt>학생</dt>
+			<dd th:text="|${course.studentCount}명|">19명</dd>
+			<dt>미제출 학생</dt>
+			<dd><span th:classappend="${course.unsubmittedCount() > 0} ? 'unsubmitted' : 'muted'"
+					  th:text="|${course.unsubmittedCount()}명|">7명</span></dd>
+		</dl>
+		<h4>미제출 학생 명단</h4>
+		<p class="alert ok" th:if="${#lists.isEmpty(course.unsubmitted)}">모든 학생이 동의서를 제출했습니다.</p>
+		<div class="student-list" th:unless="${#lists.isEmpty(course.unsubmitted)}">
+			<div class="student-cols student-list-head">
+				<span>#</span>
+				<span>학번</span>
+				<span>이름</span>
+			</div>
+			<div class="student-cols" th:each="student, stat : ${course.unsubmitted}">
+				<span class="muted tabular" th:text="${stat.count}">1</span>
+				<span class="tabular" th:text="${student.studentId}">20010001</span>
+				<span th:text="${student.name}">홍길동</span>
+			</div>
+		</div>
+
+		<details class="danger-zone">
+			<summary>과목 삭제</summary>
+			<p th:text="|이 과목과 수강 ${course.enrollmentCount}건, 받은 동의서 ${course.consentCount}건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.|">
+				이 과목과 수강 19건, 받은 동의서 12건(서명, PDF 포함)이 함께 삭제되며 되돌릴 수 없습니다.
+			</p>
+			<p class="muted small">폐강 등으로 명부에서 빠진 과목을 정리할 때 쓰세요. 이 과목이 든 명부를 다시 올리거나, 학생 시간표(SJPT)에 이 과목이 남아 있으면 다시 생깁니다.</p>
+			<form method="post" th:action="@{/admin/semesters/{id}/courses/delete(id=${semester.id})}">
+				<input type="hidden" name="code" th:value="${course.code}">
+				<input type="hidden" name="consentCount" th:value="${course.consentCount}">
+				<input type="hidden" name="view" th:value="${timetable} ? 'timetable' : 'list'">
+				<input type="hidden" name="room" th:value="${page.room}">
+				<label><span>확인을 위해 학수번호 <strong th:text="${course.code}">000304-001</strong>을(를) 입력하세요</span>
+					<input type="text" name="confirmCode" autocomplete="off" required>
+				</label>
+				<button type="submit" class="danger">과목 삭제</button>
+			</form>
+		</details>
+	</div>
+</dialog>
 <script th:src="@{/js/admin-semester.js}"></script>
 </body>
 </html>

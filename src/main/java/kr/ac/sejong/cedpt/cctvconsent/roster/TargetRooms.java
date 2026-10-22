@@ -1,6 +1,7 @@
 package kr.ac.sejong.cedpt.cctvconsent.roster;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -25,12 +26,19 @@ public class TargetRooms {
 	}
 
 	public boolean includes(String roomLabel) {
+		return !matching(roomLabel).isEmpty();
+	}
+
+	/** 강의실 표기 중 대상 강의실인 부분, 표기 그대로(예: "호302/센B205" → ["센B205"]). */
+	public List<String> matching(String roomLabel) {
 		if (roomLabel == null) {
-			return false;
+			return List.of();
 		}
 		return Arrays.stream(roomLabel.split("/"))
-				.map(part -> part.trim().replaceFirst("^[^A-Za-z0-9]+", "").toUpperCase(Locale.ROOT))
-				.anyMatch(rooms::contains);
+				.map(String::trim)
+				.filter(part -> rooms.contains(part.replaceFirst("^[^A-Za-z0-9]+", "").toUpperCase(Locale.ROOT)))
+				.distinct()
+				.toList();
 	}
 
 }

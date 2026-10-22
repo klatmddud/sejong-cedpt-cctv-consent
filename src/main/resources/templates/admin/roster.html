@@ -16,7 +16,7 @@
 		<p class="alert error" th:if="${error}" th:text="${error}">명부 내용이 맞지 않는 과목이 있습니다.</p>
 
 		<div class="alert error" th:if="${pending}" th:object="${pending}">
-			<strong th:text="|*{fileName}: 동의서 ${#lists.size(pending.deletions)}건이 삭제됩니다.|">명부.xlsx: 동의서 2건이 삭제됩니다.</strong>
+			<strong th:text="|*{roster.fileNames}: 동의서 ${#lists.size(pending.deletions)}건이 삭제됩니다.|">명부.xlsx: 동의서 2건이 삭제됩니다.</strong>
 			<p>아래 학생은 로그인 때 수강이 확인되어 동의서를 냈지만 이 명부의 수업 명단에는 없습니다.
 				수강정정 기간에 취소한 것으로 보고 수강과 동의서를 삭제합니다. 삭제하면 되돌릴 수 없습니다.</p>
 			<div class="table-wrap">

@@ -216,6 +216,37 @@ class RosterImportServiceTest extends PostgresTestSupport {
 	}
 
 	@Test
+	void refusesHeldRosterWhenAnotherRosterWasAppliedMeanwhile() {
+		loginWith("20010009", "000304-001", "센B201");
+		signConsent(jdbc.queryForObject("select id from enrollment", Long.class));
+		RosterImportService.ConfirmationRequiredException held = confirmationRequired(
+				FixtureCourse.of("000304-001", "센B201", "20010001"));
+		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000400-001", "센B203", "20010003"));
+
+		assertThatThrownBy(() -> importService.importRoster(
+				importService.read(List.of(file("명부.xlsx", TITLE, FixtureCourse.of("000304-001", "센B201", "20010001")))),
+				LocalDate.of(2026, 12, 21), held.getDeletions(), held.getLastUploadId()))
+				.isInstanceOf(RosterImportService.StaleRosterException.class);
+		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isEqualTo(1);
+	}
+
+	@Test
+	void appliesHeldRosterOnlyOnce() {
+		loginWith("20010009", "000304-001", "센B201");
+		signConsent(jdbc.queryForObject("select id from enrollment", Long.class));
+		FixtureCourse course = FixtureCourse.of("000304-001", "센B201", "20010001");
+		RosterImportService.ConfirmationRequiredException held = confirmationRequired(course);
+		RosterImportService.ParsedRoster roster = importService.read(List.of(file("명부.xlsx", TITLE, course)));
+
+		importService.importRoster(roster, LocalDate.of(2026, 12, 21), held.getDeletions(), held.getLastUploadId());
+
+		assertThatThrownBy(() -> importService.importRoster(roster, LocalDate.of(2026, 12, 21), held.getDeletions(),
+				held.getLastUploadId()))
+				.isInstanceOf(RosterImportService.StaleRosterException.class);
+		assertThat(uploads.count()).isEqualTo(1);
+	}
+
+	@Test
 	void separateUploadUpdatesOnlyItsOwnCourses() {
 		importRoster(LocalDate.of(2026, 12, 21), FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"));
 		RosterImportService.Result second = importRoster(LocalDate.of(2026, 12, 21),
@@ -287,6 +318,16 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	private static RosterImportService.UploadedFile file(String name, String title, FixtureCourse... courses) {
 		return new RosterImportService.UploadedFile(name, RosterWorkbookFixture.workbook(title, 45, List.of(courses)));
+	}
+
+	private RosterImportService.ConfirmationRequiredException confirmationRequired(FixtureCourse... courses) {
+		try {
+			importRoster(LocalDate.of(2026, 12, 21), courses);
+		}
+		catch (RosterImportService.ConfirmationRequiredException ex) {
+			return ex;
+		}
+		throw new AssertionError("동의서 삭제 확인을 요구하지 않았습니다.");
 	}
 
 	private List<RosterImportService.ConsentDeletion> confirmationFor(FixtureCourse... courses) {

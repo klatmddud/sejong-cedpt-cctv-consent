@@ -70,8 +70,19 @@ public class SjptClient implements StudentAuthenticator {
 			try {
 				return new StudentLogin(student, term, courses(session, user, term));
 			}
+			catch (InterruptedException ex) {
+				Thread.currentThread().interrupt();
+				log.warn("sjpt 수강 과목 조회 중단 ({}-{}학기)", term.year(), term.term());
+				return new StudentLogin(student, term, null);
+			}
 			catch (SejongAuthException | IOException ex) {
 				log.warn("sjpt 수강 과목 조회 실패 ({}-{}학기): {}", term.year(), term.term(), ex.getMessage());
+				return new StudentLogin(student, term, null);
+			}
+			catch (RuntimeException ex) {
+				// 응답 파싱 오류 등의 메시지에는 응답 내용(개인정보)이 들어갈 수 있어 예외 종류만 남긴다
+				log.warn("sjpt 수강 과목 조회 실패 ({}-{}학기): {}", term.year(), term.term(), ex.getClass().getName());
+				log.debug("sjpt 수강 과목 조회 실패", ex);
 				return new StudentLogin(student, term, null);
 			}
 		});
@@ -102,11 +113,9 @@ public class SjptClient implements StudentAuthenticator {
 
 	/**
 	 * 새 세션으로 포털에 로그인하고 sjpt에 들어가 작업을 실행한다.
+	 * 학번, 비밀번호 형식은 호출하는 쪽(StudentAuthenticationProvider)이 먼저 확인한다.
 	 */
 	private static <T> T inSession(String studentId, String password, SessionAction<T> action) {
-		if (isBlank(studentId) || isBlank(password)) {
-			throw new SejongAuthException(SejongAuthException.Reason.INVALID_CREDENTIALS, "학번과 비밀번호를 입력하세요.");
-		}
 		String id = studentId.trim();
 
 		try (SejongSession session = new SejongSession()) {
@@ -293,10 +302,6 @@ public class SjptClient implements StudentAuthenticator {
 	private static String text(JsonNode node, String field) {
 		JsonNode value = node.get(field);
 		return value == null || value.isNull() ? "" : value.asString().trim();
-	}
-
-	private static boolean isBlank(String value) {
-		return value == null || value.isBlank();
 	}
 
 }

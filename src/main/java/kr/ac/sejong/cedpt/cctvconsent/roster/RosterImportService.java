@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -58,6 +59,14 @@ public class RosterImportService {
 	public record UploadedFile(String name, byte[] content) implements Serializable {
 	}
 
+	/**
+	 * 읽고 합친 명부. 동의서 삭제 확인을 기다리는 동안 세션에 원본 파일 대신 이것을 둔다.
+	 *
+	 * @param fileNames 함께 올린 파일 이름, ", "로 이음
+	 */
+	public record ParsedRoster(String fileNames, RosterFile roster) implements Serializable {
+	}
+
 	/** 동의서와 함께 삭제될 수강 */
 	public record ConsentDeletion(long enrollmentId, String studentId, String studentName, String courseCode,
 			String courseName) implements Serializable {
@@ -67,26 +76,77 @@ public class RosterImportService {
 	public static class ConfirmationRequiredException extends RuntimeException {
 
 		private final List<ConsentDeletion> deletions;
+		private final Long lastUploadId;
 
-		ConfirmationRequiredException(List<ConsentDeletion> deletions) {
+		ConfirmationRequiredException(List<ConsentDeletion> deletions, Long lastUploadId) {
 			super("명부에 없는 수강의 동의서 " + deletions.size() + "건이 삭제됩니다.");
 			this.deletions = deletions;
+			this.lastUploadId = lastUploadId;
 		}
 
 		public List<ConsentDeletion> getDeletions() {
 			return deletions;
 		}
 
+		/** 확인 화면을 보여 줄 때 이 학기에 마지막으로 반영된 업로드. 없으면 null. 확인할 때 그대로 넘긴다. */
+		public Long getLastUploadId() {
+			return lastUploadId;
+		}
+
+	}
+
+	/** 확인 화면을 보는 사이 같은 학기에 다른 명부가 반영됐다. 보류한 명부는 오래된 것이므로 반영하지 않는다. */
+	public static class StaleRosterException extends RuntimeException {
+
+		StaleRosterException() {
+			super("확인하는 사이 같은 학기에 다른 명부가 반영되었습니다. 명부를 다시 올려 주세요.");
+		}
+
 	}
 
 	/**
+	 * 함께 올린 파일을 읽어 한 명부로 합친다. 여러 파일에 있는 수업은 명단을 합친다.
+	 *
+	 * @throws RosterParseException 형식이 맞지 않는 파일이 있거나 학기가 서로 다름
+	 */
+	public ParsedRoster read(List<UploadedFile> files) {
+		return new ParsedRoster(files.stream().map(UploadedFile::name).collect(Collectors.joining(", ")), merge(files));
+	}
+
+	/** 파일을 읽어 바로 반영한다. {@link #importRoster(ParsedRoster, LocalDate, Collection)}와 같다. */
+	@Transactional
+	public Result importRoster(List<UploadedFile> files, LocalDate semesterEndsOn,
+			Collection<ConsentDeletion> confirmedDeletions) {
+		return doImport(read(files), semesterEndsOn, confirmedDeletions, false, null);
+	}
+
+	/**
+	 * 새로 올린 명부를 반영한다.
+	 *
 	 * @param confirmedDeletions 관리자가 확인한 동의서 삭제 목록(ConfirmationRequiredException으로 보여 준 것)
 	 * @throws ConfirmationRequiredException 삭제할 동의서 중 확인하지 않은 것이 있음
 	 */
 	@Transactional
-	public Result importRoster(List<UploadedFile> files, LocalDate semesterEndsOn,
+	public Result importRoster(ParsedRoster roster, LocalDate semesterEndsOn,
 			Collection<ConsentDeletion> confirmedDeletions) {
-		RosterFile roster = merge(files);
+		return doImport(roster, semesterEndsOn, confirmedDeletions, false, null);
+	}
+
+	/**
+	 * 동의서 삭제를 확인받아 보류했던 명부를 반영한다.
+	 *
+	 * @param expectedLastUploadId ConfirmationRequiredException의 getLastUploadId()
+	 * @throws StaleRosterException 그 뒤 같은 학기에 다른 명부가 반영됨(같은 확인을 두 번 보낸 경우 포함)
+	 */
+	@Transactional
+	public Result importRoster(ParsedRoster roster, LocalDate semesterEndsOn,
+			Collection<ConsentDeletion> confirmedDeletions, Long expectedLastUploadId) {
+		return doImport(roster, semesterEndsOn, confirmedDeletions, true, expectedLastUploadId);
+	}
+
+	private Result doImport(ParsedRoster parsed, LocalDate semesterEndsOn,
+			Collection<ConsentDeletion> confirmedDeletions, boolean confirming, Long expectedLastUploadId) {
+		RosterFile roster = parsed.roster();
 		List<RosterFile.Course> targets = roster.courses().stream()
 				.filter(course -> targetRooms.includes(course.room()))
 				.toList();
@@ -97,6 +157,10 @@ public class RosterImportService {
 		// 같은 학기 첫 학생 로그인이 동시에 학기를 만들어도 충돌하지 않도록 EnrollmentSync와 같은 방식으로 만든다
 		semesters.insertIfAbsent(roster.year(), roster.term(), semesterEndsOn, semesterEndsOn.plusYears(1));
 		Semester semester = semesters.findForUpdate(roster.year(), roster.term()).orElseThrow();
+		Long lastUploadId = uploads.findTopBySemesterOrderByIdDesc(semester).map(RosterUpload::getId).orElse(null);
+		if (confirming && !Objects.equals(lastUploadId, expectedLastUploadId)) {
+			throw new StaleRosterException();
+		}
 		semester.changeEndsOn(semesterEndsOn);
 
 		Map<String, Course> courseByCode = courses.findBySemester(semester).stream()
@@ -180,20 +244,19 @@ public class RosterImportService {
 					.filter(enrollment -> signed.contains(enrollment.getId()))
 					.map(enrollment -> new ConsentDeletion(enrollment.getId(), enrollment.getStudentId(),
 							enrollment.getStudentName(), enrollment.getCourse().getCode(), enrollment.getCourse().getName()))
-					.toList());
+					.toList(), lastUploadId);
 		}
 		// consent, consent_document는 ON DELETE CASCADE로 함께 삭제된다
 		enrollments.deleteAll(cancelled);
 
 		previouslyActive.removeAll(nowActive);
 		int removed = previouslyActive.size();
-		uploads.save(new RosterUpload(semester, fileNames(files), targets.size(), enrollmentCount, added, removed,
+		uploads.save(new RosterUpload(semester, fit(parsed.fileNames()), targets.size(), enrollmentCount, added, removed,
 				cancelled.size(), signed.size()));
 		return new Result(roster.year(), roster.term(), targets.size(), enrollmentCount, students.size(), added, removed,
 				cancelled.size(), signed.size());
 	}
 
-	/** 함께 올린 파일을 한 명부로 합친다. 여러 파일에 있는 수업은 명단을 합친다. */
 	private static RosterFile merge(List<UploadedFile> files) {
 		if (files.isEmpty()) {
 			throw new RosterParseException("수강명부 파일이 없습니다.");
@@ -228,9 +291,8 @@ public class RosterImportService {
 				List.copyOf(students.values()));
 	}
 
-	/** DB 칼럼 길이(255)에 맞춘다. */
-	private static String fileNames(List<UploadedFile> files) {
-		String names = files.stream().map(UploadedFile::name).collect(Collectors.joining(", "));
+	/** 파일 이름을 DB 칼럼 길이(255)에 맞춘다. */
+	private static String fit(String names) {
 		return names.length() > 255 ? names.substring(0, 254) + "…" : names;
 	}
 

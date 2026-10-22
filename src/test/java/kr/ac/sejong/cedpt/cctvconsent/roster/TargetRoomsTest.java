@@ -2,6 +2,7 @@ package kr.ac.sejong.cedpt.cctvconsent.roster;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -24,6 +25,13 @@ class TargetRoomsTest {
 	})
 	void matchesRoomAfterBuildingPrefix(String room, boolean expected) {
 		assertThat(targetRooms.includes(room)).isEqualTo(expected);
+	}
+
+	@Test
+	void returnsTargetPartsAsWritten() {
+		assertThat(targetRooms.matching("센B201/ 센B202 /호302")).containsExactly("센B201", "센B202");
+		assertThat(targetRooms.matching("센B209")).isEmpty();
+		assertThat(targetRooms.matching(null)).isEmpty();
 	}
 
 }

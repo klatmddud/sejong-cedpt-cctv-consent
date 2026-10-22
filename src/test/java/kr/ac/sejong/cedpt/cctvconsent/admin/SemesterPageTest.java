@@ -6,13 +6,16 @@ import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.roster.CourseTime;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService.CourseSummary;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService.StudentSummary;
+import kr.ac.sejong.cedpt.cctvconsent.roster.TargetRooms;
 import org.junit.jupiter.api.Test;
 
 class SemesterPageTest {
 
+	private static final TargetRooms ROOMS = new TargetRooms("B201,B202,B203,B206,B207");
+
 	@Test
 	void groupsCoursesByRoomAndCountsUnsubmitted() {
-		SemesterPage page = SemesterPage.of(List.of(
+		SemesterPage page = page(List.of(
 				course("000304-001", "센B201", "월수13:30-15:00", 30, 2),
 				course("000305-001", "센B201", "화10:00-12:00", 20, 0),
 				course("000306-001", "센B203", "금09:00-12:00", 40, 5)), null);
@@ -25,7 +28,7 @@ class SemesterPageTest {
 
 	@Test
 	void placesCoursesOfChosenRoomOnWeekdayTimetable() {
-		SemesterPage page = SemesterPage.of(List.of(
+		SemesterPage page = page(List.of(
 				course("000304-001", "센B201", "월수13:30-15:00", 30, 0),
 				course("000306-001", "센B203", "금09:00-12:00", 40, 0)), "센B203");
 
@@ -41,7 +44,7 @@ class SemesterPageTest {
 
 	@Test
 	void widensTimetableForEarlyLateAndWeekendCourses() {
-		SemesterPage page = SemesterPage.of(List.of(
+		SemesterPage page = page(List.of(
 				course("000304-001", "센B201", "토08:30-10:00", 10, 0),
 				course("000305-001", "센B201", "월20:00-21:30", 10, 0)), "없는 강의실");
 
@@ -53,7 +56,7 @@ class SemesterPageTest {
 
 	@Test
 	void placesOverlappingCoursesSideBySide() {
-		SemesterPage page = SemesterPage.of(List.of(
+		SemesterPage page = page(List.of(
 				course("000304-001", "센B201", "월10:00-12:00", 10, 0),
 				course("000305-001", "센B201", "월10:30-12:00", 10, 0),
 				course("000306-001", "센B201", "월12:00-13:00", 10, 0)), null);
@@ -64,8 +67,32 @@ class SemesterPageTest {
 	}
 
 	@Test
+	void endsTimetableAtMidnightForLateCourses() {
+		SemesterPage page = page(List.of(course("000304-001", "센B201", "목21:00-23:30", 10, 0)), null);
+
+		assertThat(page.hours()).startsWith("09:00").endsWith("23:00").hasSize(15);
+		assertThat(page.timetableHeight()).isEqualTo(30 * SemesterPage.SLOT_PX);
+		SemesterPage.Block block = page.days().get(3).blocks().get(0);
+		assertThat(block.top() + block.height() + 4).isEqualTo(29 * SemesterPage.SLOT_PX + 2);
+	}
+
+	@Test
+	void putsCourseOfSeveralRoomsUnderEachTargetRoom() {
+		SemesterPage page = page(List.of(
+				course("000304-001", "센B201/센B202", "월10:00-12:00", 10, 3),
+				course("000305-001", "호302/센B202", "화10:00-12:00", 10, 1),
+				course("000306-001", "센B209", "수10:00-12:00", 10, 0)), "센B202");
+
+		assertThat(page.groups()).extracting(g -> g.room() + "/" + g.courses().size() + "/" + g.unsubmittedCount())
+				.containsExactly("센B201/1/3", "센B202/2/4", "센B209/1/0");
+		assertThat(page.unsubmittedCount()).isEqualTo(4);
+		assertThat(page.courses()).hasSize(3);
+		assertThat(page.days().get(0).blocks()).extracting(b -> b.course().code()).containsExactly("000304-001");
+	}
+
+	@Test
 	void listsCoursesWithUnreadableScheduleSeparately() {
-		SemesterPage page = SemesterPage.of(List.of(course("000304-001", "센B201", "미정", 10, 0)), null);
+		SemesterPage page = page(List.of(course("000304-001", "센B201", "미정", 10, 0)), null);
 
 		assertThat(page.unscheduled()).extracting(CourseSummary::code).containsExactly("000304-001");
 		assertThat(page.days()).allMatch(day -> day.blocks().isEmpty());
@@ -73,7 +100,11 @@ class SemesterPageTest {
 
 	@Test
 	void hasNoRoomWithoutCourses() {
-		assertThat(SemesterPage.of(List.of(), null).room()).isNull();
+		assertThat(page(List.of(), null).room()).isNull();
+	}
+
+	private static SemesterPage page(List<CourseSummary> courses, String room) {
+		return SemesterPage.of(courses, room, ROOMS::matching);
 	}
 
 	private static CourseSummary course(String code, String room, String schedule, long students, int unsubmitted) {

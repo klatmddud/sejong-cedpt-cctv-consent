@@ -42,11 +42,16 @@ public class Course {
 		this.code = code;
 	}
 
+	/** 값이 칸 길이(V1__roster.sql)를 넘으면 자른다. sjpt 값이 길어 저장이 실패하면 학생의 수강 반영 전체가 롤백되기 때문이다. */
 	public void update(String name, String professor, String schedule, String room) {
-		this.name = name;
-		this.professor = professor;
-		this.schedule = schedule;
-		this.room = room;
+		this.name = fit(name, 200);
+		this.professor = fit(professor, 100);
+		this.schedule = fit(schedule, 100);
+		this.room = fit(room, 100);
+	}
+
+	private static String fit(String value, int length) {
+		return value == null || value.length() <= length ? value : value.substring(0, length);
 	}
 
 	public Long getId() {
