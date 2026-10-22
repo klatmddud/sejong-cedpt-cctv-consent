@@ -21,6 +21,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.PostgresTestSupport;
 import kr.ac.sejong.cedpt.cctvconsent.auth.SejongAuthException;
@@ -80,7 +85,7 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 				RosterTestFixtures.course("000304-001", "센B201", STUDENT, OTHER),
 				RosterTestFixtures.course("000305-001", "센B206", STUDENT),
 				RosterTestFixtures.course("000306-001", "센B209", STUDENT)));
-		rosterImport.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", roster)), List.of());
+		rosterImport.importRoster(rosterImport.read(List.of(new RosterImportService.UploadedFile("명부.xlsx", roster))), List.of());
 	}
 
 	@Test
@@ -140,6 +145,49 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	}
 
 	@Test
+	void doesNotCountPortalOutageAsWrongPassword() throws Exception {
+		String id = "20019998";
+		when(authenticator.authenticate(anyString(), anyString()))
+				.thenThrow(new SejongAuthException(SejongAuthException.Reason.UNAVAILABLE, "down"));
+
+		for (int i = 0; i < 4; i++) {
+			mvc.perform(formLogin("/login").user(id).password("pw")).andExpect(unauthenticated());
+		}
+
+		verify(authenticator, times(4)).authenticate(id, "pw");
+	}
+
+	@Test
+	void sendsOnlyOneConcurrentLoginOfSameStudentToPortal() throws Exception {
+		String id = "20019997";
+		CountDownLatch portalCalled = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		when(authenticator.authenticate(anyString(), anyString())).thenAnswer(invocation -> {
+			portalCalled.countDown();
+			release.await(5, TimeUnit.SECONDS);
+			throw new SejongAuthException(SejongAuthException.Reason.INVALID_CREDENTIALS, "wrong");
+		});
+
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		try {
+			Future<?> first = executor.submit(() -> {
+				mvc.perform(formLogin("/login").user(id).password("wrong")).andExpect(unauthenticated());
+				return null;
+			});
+			assertThat(portalCalled.await(5, TimeUnit.SECONDS)).isTrue();
+
+			// 첫 시도가 포털 응답을 기다리는 동안 같은 학번 시도는 포털에 보내지 않는다
+			mvc.perform(formLogin("/login").user(id).password("wrong")).andExpect(unauthenticated());
+			release.countDown();
+			first.get(5, TimeUnit.SECONDS);
+		}
+		finally {
+			executor.shutdownNow();
+		}
+		verify(authenticator, times(1)).authenticate(id, "wrong");
+	}
+
+	@Test
 	void rejectsNonNumericStudentIdWithoutCallingPortal() throws Exception {
 		mvc.perform(formLogin("/login").user("admin").password("x")).andExpect(unauthenticated());
 
@@ -180,6 +228,19 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 				.andExpect(redirectedUrl("/consents/sign"))
 				.andExpect(flash().attribute("error", Matchers.containsString("이미 제출")));
 		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isEqualTo(2);
+	}
+
+	@Test
+	void rejectsSubmissionWithTooManyCourses() throws Exception {
+		String[] ids = java.util.stream.LongStream.rangeClosed(1, 31).mapToObj(String::valueOf).toArray(String[]::new);
+
+		mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+						.param("enrollmentIds", ids)
+						.param("agreed", "true")
+						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
+				.andExpect(redirectedUrl("/consents/sign"))
+				.andExpect(flash().attributeExists("error"));
+		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isZero();
 	}
 
 	@Test

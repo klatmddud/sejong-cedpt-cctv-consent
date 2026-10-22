@@ -38,7 +38,7 @@ class RosterQueryServiceTest extends PostgresTestSupport {
 		byte[] xlsx = RosterWorkbookFixture.workbook(RosterTestFixtures.TITLE, 45, List.of(
 				FixtureCourse.of("000304-001", "센B201", "20010002", "20010001", "20010003"),
 				FixtureCourse.of("000305-001", "센B202", "20010001")));
-		importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)),
+		importService.importRoster(importService.read(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx))),
 				List.of());
 		sign("000304-001", "20010001");
 		sign("000305-001", "20010001");
@@ -53,11 +53,14 @@ class RosterQueryServiceTest extends PostgresTestSupport {
 		RosterQueryService.CourseSummary first = courses.get(0);
 		assertThat(first.studentCount()).isEqualTo(2);
 		assertThat(first.unsubmittedCount()).isEqualTo(1);
-		assertThat(first.unsubmitted()).extracting(RosterQueryService.StudentSummary::studentId)
-				.containsExactly("20010002");
+		// 명부에서 빠진 20010003은 명단에도 없다
+		assertThat(first.students()).extracting(s -> s.studentId() + "/" + s.submitted())
+				.containsExactly("20010001/true", "20010002/false");
 		assertThat(first.times()).containsExactly(
 				new CourseTime(DayOfWeek.MONDAY, LocalTime.of(10, 30), LocalTime.of(12, 0)));
-		assertThat(courses.get(1).unsubmitted()).isEmpty();
+		assertThat(courses.get(1).students()).extracting(RosterQueryService.StudentSummary::submitted)
+				.containsExactly(true);
+		assertThat(courses.get(1).unsubmittedCount()).isZero();
 	}
 
 	private void sign(String courseCode, String studentId) {

@@ -12,6 +12,7 @@ import java.util.TreeMap;
 import java.util.function.Function;
 import kr.ac.sejong.cedpt.cctvconsent.roster.CourseTime;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterQueryService.CourseSummary;
+import kr.ac.sejong.cedpt.cctvconsent.roster.TargetRooms;
 
 /**
  * 학기 동의서 현황 화면: 강의실별 목록과 강의실 하나의 주간 시간표.
@@ -47,25 +48,31 @@ record SemesterPage(List<CourseSummary> courses, List<RoomGroup> groups, int uns
 	 * @param targetRooms 강의실 표기에서 대상 강의실 부분을 고른다
 	 */
 	static SemesterPage of(List<CourseSummary> courses, String requestedRoom,
-			Function<String, List<String>> targetRooms) {
+			Function<String, List<TargetRooms.Room>> targetRooms) {
+		// 같은 강의실이 "센B201", "B201"처럼 다르게 적혀도 한 묶음이 되도록 강의실 id로 묶는다
 		Map<String, List<CourseSummary>> byRoom = new TreeMap<>();
+		Map<String, String> labels = new TreeMap<>();
 		for (CourseSummary course : courses) {
-			List<String> rooms = targetRooms.apply(course.room());
-			for (String room : rooms.isEmpty() ? List.of(course.room()) : rooms) {
-				byRoom.computeIfAbsent(room, key -> new ArrayList<>()).add(course);
+			List<TargetRooms.Room> rooms = targetRooms.apply(course.room());
+			for (TargetRooms.Room room : rooms.isEmpty() ? List.of(new TargetRooms.Room(course.room(), course.room()))
+					: rooms) {
+				byRoom.computeIfAbsent(room.id(), key -> new ArrayList<>()).add(course);
+				// 건물 약자가 붙은 표기("센B201")를 화면에 쓴다
+				labels.merge(room.id(), room.label(), (a, b) -> b.length() > a.length() ? b : a);
 			}
 		}
 		byRoom.values().forEach(list -> list.sort(Comparator.comparing(CourseSummary::code)));
 		List<RoomGroup> groups = byRoom.entrySet().stream()
-				.map(entry -> new RoomGroup(entry.getKey(), entry.getValue(),
+				.map(entry -> new RoomGroup(labels.get(entry.getKey()), entry.getValue(),
 						entry.getValue().stream().mapToLong(CourseSummary::studentCount).sum(),
 						entry.getValue().stream().mapToInt(CourseSummary::unsubmittedCount).sum()))
 				.toList();
 		// 여러 강의실 수업이 두 번 세이지 않도록 과목 기준으로 센다
 		int unsubmitted = courses.stream().mapToInt(CourseSummary::unsubmittedCount).sum();
-		String room = requestedRoom != null && byRoom.containsKey(requestedRoom) ? requestedRoom
-				: byRoom.isEmpty() ? null : byRoom.keySet().iterator().next();
-		List<CourseSummary> inRoom = room == null ? List.of() : byRoom.get(room);
+		RoomGroup chosen = groups.stream().filter(group -> group.room().equals(requestedRoom)).findFirst()
+				.orElse(groups.isEmpty() ? null : groups.get(0));
+		String room = chosen == null ? null : chosen.room();
+		List<CourseSummary> inRoom = chosen == null ? List.of() : chosen.courses();
 
 		// 분 단위로 계산한다. 끝이 24:00이 될 수 있어 LocalTime으로는 넘어가지 않는다
 		List<CourseTime> times = inRoom.stream().flatMap(course -> course.times().stream()).toList();

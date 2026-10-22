@@ -45,7 +45,7 @@ class ConsentBundleServiceTest extends PostgresTestSupport {
 				RosterTestFixtures.course("000304-001", "센B201", "20010002", "20010001", "20010003"),
 				RosterTestFixtures.course("000400-001", "센B203", "20010004"),
 				RosterTestFixtures.course("000500-001", "센B206", "20010005")));
-		importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", roster)), List.of());
+		importService.importRoster(importService.read(List.of(new RosterImportService.UploadedFile("명부.xlsx", roster))), List.of());
 		semesterId = jdbc.queryForObject("select id from semester", Long.class);
 		sign("000304-001", "20010002", "둘째");
 		sign("000304-001", "20010001", "첫째");
@@ -53,9 +53,10 @@ class ConsentBundleServiceTest extends PostgresTestSupport {
 	}
 
 	@Test
-	void putsCoversAroundEachCourseAndSortsConsentsByStudentId() throws IOException {
+	void putsCoversAroundEachCourseInSelectedOrderAndSortsConsentsByStudentId() throws IOException {
 		List<String> pages;
-		try (ConsentBundleService.Bundle bundle = bundles.bundle(semesterId, List.of("000400-001", "000304-001"))) {
+		try (ConsentBundleService.Bundle bundle = bundles.bundle(semesterId,
+				List.of("000304-001", "000400-001", "000304-001"))) {
 			assertThat(bundle.courseCount()).isEqualTo(2);
 			assertThat(bundle.consentCount()).isEqualTo(3);
 			assertThat(bundle.fileName()).isEqualTo("CCTV동의서_2026-2학기_2과목.pdf");
@@ -64,7 +65,7 @@ class ConsentBundleServiceTest extends PostgresTestSupport {
 			assertThat(bundle.directory()).doesNotExist();
 		}
 
-		// 강의실 순: 센B201(000304-001) 다음 센B203(000400-001)
+		// 고른 순서(겹친 것은 처음 한 번): 000304-001 다음 000400-001
 		assertThat(pages).hasSize(2 + 2 + 1 + 2);
 		assertThat(pages.get(0)).contains("시작", "과목000304-001", "학수번호  000304-001", "강의실  센B201",
 				"담당교수  교수000304-001");
@@ -74,6 +75,27 @@ class ConsentBundleServiceTest extends PostgresTestSupport {
 		assertThat(pages.get(4)).contains("시작", "학수번호  000400-001");
 		assertThat(pages.get(5)).contains("넷째");
 		assertThat(pages.get(6)).contains("끝", "학수번호  000400-001");
+	}
+
+	@Test
+	void followsSelectedOrderRatherThanRoom() throws IOException {
+		try (ConsentBundleService.Bundle bundle = bundles.bundle(semesterId, List.of("000400-001", "000304-001"))) {
+			List<String> pages = pageTexts(Files.readAllBytes(bundle.file()));
+			assertThat(pages.get(0)).contains("000400-001");
+			assertThat(pages.get(3)).contains("000304-001");
+		}
+	}
+
+	@Test
+	void leavesOutConsentsOfStudentsNoLongerEnrolled() throws IOException {
+		jdbc.update("update enrollment set in_latest_roster = false, in_sjpt = false where student_id = '20010002'");
+
+		try (ConsentBundleService.Bundle bundle = bundles.bundle(semesterId, List.of("000304-001"))) {
+			assertThat(bundle.consentCount()).isEqualTo(1);
+			List<String> pages = pageTexts(Files.readAllBytes(bundle.file()));
+			assertThat(pages).hasSize(3);
+			assertThat(pages.get(1)).contains("첫째");
+		}
 	}
 
 	@Test

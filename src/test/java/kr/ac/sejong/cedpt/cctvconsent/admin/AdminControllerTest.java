@@ -79,6 +79,15 @@ class AdminControllerTest extends PostgresTestSupport {
 	}
 
 	@Test
+	void sendsSecurityHeaders() throws Exception {
+		mvc.perform(get("/admin/login"))
+				.andExpect(header().string("Content-Security-Policy", Matchers.containsString("script-src 'self'")))
+				.andExpect(header().string("Referrer-Policy", "same-origin"));
+		mvc.perform(get("/login"))
+				.andExpect(header().string("Content-Security-Policy", Matchers.containsString("frame-ancestors 'none'")));
+	}
+
+	@Test
 	void uploadsRosterAndShowsSemester() throws Exception {
 		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, RosterTestFixtures.roster(List.of(
 				RosterTestFixtures.course("000304-001", "센B201", "20010001", "20010002"),
@@ -109,7 +118,9 @@ class AdminControllerTest extends PostgresTestSupport {
 				.andExpect(content().string(Matchers.containsString("미제출 3건")))
 				.andExpect(content().string(Matchers.containsString("class=\"course-row\"")))
 				.andExpect(content().string(Matchers.containsString("id=\"course-000304-001\"")))
-				.andExpect(content().string(Matchers.containsString("20010002")));
+				.andExpect(content().string(Matchers.containsString("20010002")))
+				.andExpect(content().string(Matchers.containsString("학생 명단")))
+				.andExpect(content().string(Matchers.containsString("class=\"status missing\"")));
 
 		mvc.perform(get("/admin/semesters/{id}", semesterId).param("view", "timetable").param("room", "센B203")
 						.with(user("admin").roles("ADMIN")))

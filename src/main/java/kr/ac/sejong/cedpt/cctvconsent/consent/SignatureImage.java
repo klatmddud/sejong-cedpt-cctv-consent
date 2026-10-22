@@ -4,7 +4,10 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Base64;
+import java.util.Iterator;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 
 /**
  * 브라우저 서명 패드가 보낸 PNG(data URL)를 검증한다. 빈 서명, PNG가 아닌 값, 지나치게 큰 이미지를 거부한다.
@@ -18,6 +21,35 @@ final class SignatureImage {
 	private static final int MIN_INK_PIXELS = 150;
 
 	private SignatureImage() {
+	}
+
+	/**
+	 * 헤더의 가로세로를 먼저 보고 MAX_SIDE 안일 때만 픽셀을 읽는다. 작은 파일에 큰 크기를 적은 PNG를 그대로 읽으면
+	 * 디코더가 그 크기만큼 메모리를 먼저 잡아 서버가 멈출 수 있다.
+	 *
+	 * @return PNG가 아니거나 크기가 넘으면 null
+	 */
+	private static BufferedImage decode(byte[] png) {
+		try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(png))) {
+			Iterator<ImageReader> readers = ImageIO.getImageReadersByFormatName("png");
+			if (in == null || !readers.hasNext()) {
+				return null;
+			}
+			ImageReader reader = readers.next();
+			try {
+				reader.setInput(in, true, true);
+				if (reader.getWidth(0) > MAX_SIDE || reader.getHeight(0) > MAX_SIDE) {
+					return null;
+				}
+				return reader.read(0);
+			}
+			finally {
+				reader.dispose();
+			}
+		}
+		catch (IOException | RuntimeException ex) {
+			return null;
+		}
 	}
 
 	static byte[] fromDataUrl(String dataUrl) {
@@ -34,14 +66,8 @@ final class SignatureImage {
 		if (png.length > MAX_BYTES) {
 			throw new ConsentException("consent.error.signatureInvalid");
 		}
-		BufferedImage image;
-		try {
-			image = ImageIO.read(new ByteArrayInputStream(png));
-		}
-		catch (IOException ex) {
-			image = null;
-		}
-		if (image == null || image.getWidth() > MAX_SIDE || image.getHeight() > MAX_SIDE) {
+		BufferedImage image = decode(png);
+		if (image == null) {
 			throw new ConsentException("consent.error.signatureInvalid");
 		}
 		if (inkPixels(image) < MIN_INK_PIXELS) {

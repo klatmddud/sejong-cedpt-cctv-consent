@@ -46,6 +46,32 @@ class LoginAttemptLimiterTest {
 		assertThat(limiter.isBlocked("k", POLICY)).isFalse();
 	}
 
+	@Test
+	void cancelLastRemovesOnlyTheNewestFailure() {
+		for (int i = 0; i < 3; i++) {
+			limiter.recordFailure("k", POLICY);
+		}
+		limiter.cancelLast("k");
+
+		assertThat(limiter.isBlocked("k", POLICY)).isFalse();
+		limiter.cancelLast("unknown");
+	}
+
+	@Test
+	void removeExpiredDropsOldKeysOnly() {
+		limiter.recordFailure("old", POLICY);
+		clock.advance(Duration.ofMinutes(31));
+		limiter.recordFailure("new", POLICY);
+		limiter.recordFailure("new", POLICY);
+		limiter.recordFailure("new", POLICY);
+
+		limiter.removeExpired(Duration.ofMinutes(30));
+
+		assertThat(limiter.isBlocked("new", POLICY)).isTrue();
+		limiter.recordFailure("old", POLICY);
+		assertThat(limiter.isBlocked("old", POLICY)).isFalse();
+	}
+
 	private static final class MutableClock extends Clock {
 
 		private Instant now = Instant.parse("2026-03-04T01:00:00Z");

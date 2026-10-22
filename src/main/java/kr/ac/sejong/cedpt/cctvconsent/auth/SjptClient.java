@@ -75,8 +75,14 @@ public class SjptClient implements StudentAuthenticator {
 				log.warn("sjpt 수강 과목 조회 중단 ({}-{}학기)", term.year(), term.term());
 				return new StudentLogin(student, term, null);
 			}
-			catch (SejongAuthException | IOException ex) {
-				log.warn("sjpt 수강 과목 조회 실패 ({}-{}학기): {}", term.year(), term.term(), ex.getMessage());
+			catch (SejongAuthException ex) {
+				// 메시지에는 sjpt 오류 원문이 들어갈 수 있어 사유만 남긴다
+				log.warn("sjpt 수강 과목 조회 실패 ({}-{}학기): {}", term.year(), term.term(), ex.getReason());
+				log.debug("sjpt 수강 과목 조회 실패", ex);
+				return new StudentLogin(student, term, null);
+			}
+			catch (IOException ex) {
+				log.warn("sjpt 수강 과목 조회 실패 ({}-{}학기): {}", term.year(), term.term(), ex.getClass().getName());
 				return new StudentLogin(student, term, null);
 			}
 			catch (RuntimeException ex) {
@@ -93,7 +99,11 @@ public class SjptClient implements StudentAuthenticator {
 		return courses(studentId, password, AcademicTerm.current(clock));
 	}
 
+	/** 로그인을 거치지 않는 입구라 학번, 비밀번호가 비었는지 여기서 확인한다. */
 	public List<SjptCourse> courses(String studentId, String password, AcademicTerm term) {
+		if (studentId == null || studentId.isBlank() || password == null || password.isBlank()) {
+			throw new SejongAuthException(SejongAuthException.Reason.INVALID_CREDENTIALS, "학번과 비밀번호를 입력하세요.");
+		}
 		return inSession(studentId, password, (session, user) -> courses(session, user, term));
 	}
 

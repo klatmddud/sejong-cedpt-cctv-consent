@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 public class ConsentService {
 
 	public static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+	private static final int MAX_COURSES_PER_SUBMIT = 30;
 
 	public record CourseConsent(long enrollmentId, String semester, String courseCode, String courseName,
 			String professor, String schedule, String room, OffsetDateTime signedAt, ConsentLanguage language) {
@@ -72,6 +73,10 @@ public class ConsentService {
 			boolean agreed, String signatureDataUrl) {
 		List<Long> ids = enrollmentIds == null ? List.of() : enrollmentIds.stream().distinct().toList();
 		if (ids.isEmpty()) {
+			throw new ConsentException("consent.error.noCourse");
+		}
+		// 한 학생이 듣는 대상 수업은 몇 개뿐이다. 조작된 요청이 수강마다 쿼리를 수만 번 돌리지 못하게 막는다
+		if (ids.size() > MAX_COURSES_PER_SUBMIT) {
 			throw new ConsentException("consent.error.noCourse");
 		}
 		List<Enrollment> selected = ids.stream().map(id -> openEnrollment(studentId, id)).toList();

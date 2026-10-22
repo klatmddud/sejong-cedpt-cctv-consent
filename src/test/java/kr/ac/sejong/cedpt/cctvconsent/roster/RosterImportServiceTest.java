@@ -259,13 +259,13 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	@Test
 	void mergesFilesUploadedTogether() {
-		RosterImportService.Result result = importService.importRoster(List.of(
+		RosterImportService.Result result = importService.importRoster(importService.read(List.of(
 				file("소융.xlsx", TITLE,
 						FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"),
 						FixtureCourse.of("000305-001", "센B202", "20010002")),
 				file("AI융.xlsx", TITLE,
 						FixtureCourse.of("000304-001", "센B201", "20010002", "20010003"),
-						FixtureCourse.of("000400-001", "센B203", "20010004"))),
+						FixtureCourse.of("000400-001", "센B203", "20010004")))),
 				List.of());
 
 		assertThat(result).isEqualTo(new RosterImportService.Result(2026, "2", 3, 5, 4, 5, 0, 0, 0));
@@ -280,9 +280,9 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	@Test
 	void rejectsFilesOfDifferentSemestersUploadedTogether() {
-		assertThatThrownBy(() -> importService.importRoster(List.of(
+		assertThatThrownBy(() -> importService.importRoster(importService.read(List.of(
 				file("소융.xlsx", TITLE, FixtureCourse.of("000304-001", "센B201", "20010001")),
-				file("AI융.xlsx", "2026년도 1학기 출석부", FixtureCourse.of("000400-001", "센B203", "20010004"))),
+				file("AI융.xlsx", "2026년도 1학기 출석부", FixtureCourse.of("000400-001", "센B203", "20010004")))),
 				List.of()))
 				.isInstanceOf(RosterParseException.class);
 		assertThat(semesters.count()).isZero();
@@ -291,7 +291,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 	@Test
 	void rejectsTermOtherThanFirstAndSecond() {
 		assertThatThrownBy(() -> importService.importRoster(
-				List.of(file("명부.xlsx", "2026년도 여름학기 출석부", FixtureCourse.of("000304-001", "센B201", "20010001"))),
+				importService.read(List.of(file("명부.xlsx", "2026년도 여름학기 출석부", FixtureCourse.of("000304-001", "센B201", "20010001")))),
 				List.of()))
 				.isInstanceOf(RosterParseException.class)
 				.hasMessageContaining("1학기, 2학기");
@@ -311,7 +311,7 @@ class RosterImportServiceTest extends PostgresTestSupport {
 
 	private RosterImportService.Result importRoster(List<RosterImportService.ConsentDeletion> confirmed, FixtureCourse... courses) {
 		byte[] xlsx = RosterWorkbookFixture.workbook(TITLE, 45, List.of(courses));
-		return importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)), confirmed);
+		return importService.importRoster(importService.read(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx))), confirmed);
 	}
 
 	private static RosterImportService.UploadedFile file(String name, String title, FixtureCourse... courses) {

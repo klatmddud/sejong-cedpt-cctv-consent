@@ -113,12 +113,6 @@ public class RosterImportService {
 		return new ParsedRoster(files.stream().map(UploadedFile::name).collect(Collectors.joining(", ")), merge(files));
 	}
 
-	/** 파일을 읽어 바로 반영한다. {@link #importRoster(ParsedRoster, Collection)}와 같다. */
-	@Transactional
-	public Result importRoster(List<UploadedFile> files, Collection<ConsentDeletion> confirmedDeletions) {
-		return doImport(read(files), confirmedDeletions, false, null);
-	}
-
 	/**
 	 * 새로 올린 명부를 반영한다.
 	 *

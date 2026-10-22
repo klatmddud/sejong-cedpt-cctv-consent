@@ -36,9 +36,11 @@
 	}
 
 	// 여러 강의실 수업은 강의실마다 한 줄씩 있으므로 같은 과목 줄을 함께 바꾼다
-	function setCourse(code, checked) {
-		boxes.filter((box) => box.value === code).forEach((box) => {
-			box.checked = checked;
+	function setCourses(codes, checked) {
+		boxes.forEach((box) => {
+			if (codes.has(box.value)) {
+				box.checked = checked;
+			}
 		});
 	}
 
@@ -51,15 +53,17 @@
 	}
 
 	selectAll.addEventListener('change', () => {
-		boxes.forEach((box) => setCourse(box.value, selectAll.checked));
+		boxes.forEach((box) => {
+			box.checked = selectAll.checked;
+		});
 		update();
 	});
 	rooms.forEach((room) => room.toggle.addEventListener('change', () => {
-		room.boxes.forEach((box) => setCourse(box.value, room.toggle.checked));
+		setCourses(new Set(room.boxes.map((box) => box.value)), room.toggle.checked);
 		update();
 	}));
 	boxes.forEach((box) => box.addEventListener('change', () => {
-		setCourse(box.value, box.checked);
+		setCourses(new Set([box.value]), box.checked);
 		update();
 	}));
 	update();

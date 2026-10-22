@@ -106,7 +106,7 @@ class EnrollmentSyncTest extends PostgresTestSupport {
 
 	private void importRoster(FixtureCourse... rosterCourses) {
 		byte[] xlsx = RosterWorkbookFixture.workbook("2026년도 2학기 출석부", 45, List.of(rosterCourses));
-		importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)), List.of());
+		importService.importRoster(importService.read(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx))), List.of());
 	}
 
 	private static EnrollmentSync.EnrolledCourse course(String code, String room) {

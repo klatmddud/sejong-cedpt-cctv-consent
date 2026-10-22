@@ -156,18 +156,21 @@
 			<dd><span th:classappend="${course.unsubmittedCount() > 0} ? 'unsubmitted' : 'muted'"
 					  th:text="|${course.unsubmittedCount()}명|">7명</span></dd>
 		</dl>
-		<h4>미제출 학생 명단</h4>
-		<p class="alert ok" th:if="${#lists.isEmpty(course.unsubmitted)}">모든 학생이 동의서를 제출했습니다.</p>
-		<div class="student-list" th:unless="${#lists.isEmpty(course.unsubmitted)}">
+		<h4>학생 명단</h4>
+		<p class="muted" th:if="${#lists.isEmpty(course.students)}">수강 중인 학생이 없습니다.</p>
+		<div class="student-list" th:unless="${#lists.isEmpty(course.students)}">
 			<div class="student-cols student-list-head">
 				<span>#</span>
 				<span>학번</span>
 				<span>이름</span>
+				<span>동의서</span>
 			</div>
-			<div class="student-cols" th:each="student, stat : ${course.unsubmitted}">
+			<div class="student-cols" th:each="student, stat : ${course.students}">
 				<span class="muted tabular" th:text="${stat.count}">1</span>
 				<span class="tabular" th:text="${student.studentId}">20010001</span>
 				<span th:text="${student.name}">홍길동</span>
+				<span><span class="status" th:classappend="${student.submitted} ? 'submitted' : 'missing'"
+							th:text="${student.submitted} ? '제출' : '미제출'">미제출</span></span>
 			</div>
 		</div>
 

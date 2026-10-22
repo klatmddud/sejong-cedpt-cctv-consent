@@ -91,6 +91,18 @@ class SemesterPageTest {
 	}
 
 	@Test
+	void groupsSameRoomWrittenDifferently() {
+		SemesterPage page = page(List.of(
+				course("000304-001", "센B201", "월10:00-12:00", 10, 1),
+				course("000305-001", "B201", "화10:00-12:00", 10, 2),
+				course("000306-001", "센b201/센B202", "수10:00-12:00", 10, 0)), "센B201");
+
+		assertThat(page.groups()).extracting(g -> g.room() + "/" + g.courses().size())
+				.containsExactly("센B201/3", "센B202/1");
+		assertThat(page.days()).extracting(day -> day.blocks().size()).startsWith(1, 1, 1);
+	}
+
+	@Test
 	void listsCoursesWithUnreadableScheduleSeparately() {
 		SemesterPage page = page(List.of(course("000304-001", "센B201", "미정", 10, 0)), null);
 
@@ -109,7 +121,7 @@ class SemesterPageTest {
 
 	private static CourseSummary course(String code, String room, String schedule, long students, int unsubmitted) {
 		List<StudentSummary> missing = java.util.stream.IntStream.range(0, unsubmitted)
-				.mapToObj(i -> new StudentSummary("2001000" + i, "학생" + i))
+				.mapToObj(i -> new StudentSummary("2001000" + i, "학생" + i, false))
 				.toList();
 		return new CourseSummary(code, "과목" + code, "김교수", schedule, room, students, CourseTime.parse(schedule),
 				missing, students, 0);

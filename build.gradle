@@ -67,3 +67,8 @@ tasks.named('test') {
 		}
 	}
 }
+
+// 로컬 실행 전용 설정(테스트 관리자 해시, 테스트 학생 계정)은 배포 jar에 넣지 않는다. bootRun과 테스트는 그대로 쓴다
+tasks.named('bootJar') {
+	exclude 'application-local.properties', 'kr/ac/sejong/cedpt/cctvconsent/local/**'
+}

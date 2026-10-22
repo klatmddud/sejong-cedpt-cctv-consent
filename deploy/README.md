@@ -63,3 +63,18 @@ docker logs -f cctv-consent                       # 앱 로그
 docker exec caddy caddy reload --config /etc/caddy/Caddyfile   # Caddyfile 수정 후
 docker exec -it cctv-db psql -U cctv_consent      # DB 접속
 ```
+docker logs cctv-consent 2>&1 | grep audit        # 관리자 작업 감사 로그
+
+## 보안 운영 메모
+
+- **관리자 비밀번호**: 공용 계정 하나로 모든 학생의 서명과 동의서를 내려받을 수 있다. 아이디는 `admin` 대신 다른 값을 쓰고,
+  비밀번호는 무작위 16자 이상으로 만든다(`openssl rand -base64 18`). 담당자가 바뀌면 위 방법으로 바로 바꾼다.
+- **감사 로그**: 관리자 로그인 성공·실패·차단, 명부 반영, 과목 삭제, 동의서 일괄 다운로드를 `audit` 로거로 남긴다
+  (시각, IP, 작업, 건수. 학번·이름은 남기지 않는다). 컨테이너를 다시 만들면 로그가 사라지므로 필요하면 그 전에 저장한다.
+- **동의서 파기**: 매일 04:00(KST)에 파기 예정일(학기 종료 1년 뒤)이 된 학기를 과목, 수강, 동의서와 함께 지운다.
+  1학기는 6월 30일, 2학기는 12월 31일에 끝난다.
+- **학생 로그인 제한**: 세종대 포털은 5회 실패하면 잠기므로 이 사이트에서는 학번당 24시간에 3회, IP당 30분에 10회 실패하면 막는다.
+  같은 학번은 동시에 한 번만, 포털 호출은 서버 전체에서 동시에 8개까지만 보낸다. 제한 기록은 메모리에만 있어 재시작하면 풀린다.
+- **배포 액션**: `deploy.yml`의 `appleboy/ssh-action`은 서버 SSH 키를 받으므로 커밋 SHA로 고정했다. 버전을 올릴 때는
+  [릴리스](https://github.com/appleboy/ssh-action/releases)를 확인하고 SHA를 바꾼다.
+- **로컬 전용 설정**: `application-local.properties`와 `local` 패키지(테스트 계정)는 배포 jar에 들어가지 않는다(`build.gradle`의 `bootJar`).

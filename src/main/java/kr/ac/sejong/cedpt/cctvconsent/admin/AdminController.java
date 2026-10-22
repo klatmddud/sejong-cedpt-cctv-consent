@@ -113,6 +113,8 @@ class AdminController {
 			response.setContentLengthLong(Files.size(bundle.file()));
 			response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
 					ContentDisposition.attachment().filename(bundle.fileName(), StandardCharsets.UTF_8).build().toString());
+			AdminAudit.log("동의서 일괄 다운로드: 학기 {}, 과목 {}개, 동의서 {}건", id, bundle.courseCount(),
+					bundle.consentCount());
 			Files.copy(bundle.file(), response.getOutputStream());
 			return null;
 		}
@@ -143,6 +145,8 @@ class AdminController {
 		}
 		try {
 			CourseDeletionService.Deleted deleted = courseDeletion.delete(id, code, consentCount);
+			AdminAudit.log("과목 삭제: 학기 {}, 과목 {}, 수강 {}건, 동의서 {}건", id, deleted.code(),
+					deleted.enrollmentCount(), deleted.consentCount());
 			redirect.addFlashAttribute("notice", "%s %s 과목을 지웠습니다 (수강 %d건, 동의서 %d건)."
 					.formatted(deleted.name(), deleted.code(), deleted.enrollmentCount(), deleted.consentCount()));
 		}
@@ -191,7 +195,7 @@ class AdminController {
 			return "redirect:/admin/roster";
 		}
 		try {
-			redirect.addFlashAttribute("result", importService.importRoster(roster, List.of()));
+			redirect.addFlashAttribute("result", audited(roster, importService.importRoster(roster, List.of())));
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
 			session.setAttribute(PENDING_ROSTER,
@@ -217,12 +221,14 @@ class AdminController {
 			session.removeAttribute(PENDING_ROSTER);
 		}
 		if (pending == null) {
-			redirect.addFlashAttribute("error", "확인할 업로드가 없습니다. 명부를 다시 올려 주세요.");
+			// 확인을 두 번 보내면 두 번째가 여기로 온다. 첫 번째가 반영했을 수 있으므로 다시 올리라고만 하지 않는다
+			redirect.addFlashAttribute("error",
+					"확인할 업로드가 없습니다. 방금 반영했다면 아래 최근 업로드에서 확인하고, 없으면 명부를 다시 올려 주세요.");
 			return "redirect:/admin/roster";
 		}
 		try {
-			redirect.addFlashAttribute("result", importService.importRoster(pending.roster(), pending.deletions(),
-					pending.lastUploadId()));
+			redirect.addFlashAttribute("result", audited(pending.roster(),
+					importService.importRoster(pending.roster(), pending.deletions(), pending.lastUploadId())));
 		}
 		catch (RosterImportService.ConfirmationRequiredException ex) {
 			session.setAttribute(PENDING_ROSTER, pending.withConfirmation(ex));
@@ -243,6 +249,14 @@ class AdminController {
 	String cancelRoster(HttpSession session) {
 		session.removeAttribute(PENDING_ROSTER);
 		return "redirect:/admin/roster";
+	}
+
+	private static RosterImportService.Result audited(RosterImportService.ParsedRoster roster,
+			RosterImportService.Result result) {
+		AdminAudit.log("명부 반영: {}-{}학기, 파일 [{}], 수업 {}개, 추가 {}건, 제외 {}건, 삭제 {}건(동의서 {}건)",
+				result.year(), result.term(), roster.fileNames(), result.courseCount(), result.addedCount(),
+				result.removedCount(), result.deletedCount(), result.deletedConsentCount());
+		return result;
 	}
 
 	/** 브라우저가 보낸 경로를 떼고 DB 칼럼 길이(255)에 맞춘다. */

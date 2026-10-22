@@ -87,14 +87,14 @@ interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 			group by e.course.id""")
 	List<Object[]> countActiveByCourse(Semester semester);
 
-	/** 동의서를 내지 않은 수강 중 학생 [course id, 학번, 이름], 학번 순. consent 테이블은 findSignedIds처럼 직접 읽는다. */
+	/** 수강 중 학생 [course id, 학번, 이름, 동의서 제출 여부], 학번 순. consent 테이블은 findSignedIds처럼 직접 읽는다. */
 	@Query(value = """
-			select e.course_id, e.student_id, e.student_name from enrollment e
+			select e.course_id, e.student_id, e.student_name,
+			exists (select 1 from consent s where s.enrollment_id = e.id) from enrollment e
 			join course c on c.id = e.course_id
 			where c.semester_id = :semesterId and (e.in_latest_roster or e.in_sjpt)
-			and not exists (select 1 from consent s where s.enrollment_id = e.id)
 			order by e.student_id""", nativeQuery = true)
-	List<Object[]> findUnsubmitted(long semesterId);
+	List<Object[]> findActiveStudents(long semesterId);
 
 }
 

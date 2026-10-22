@@ -54,6 +54,33 @@ public class LoginAttemptLimiter {
 		failures.remove(key);
 	}
 
+	/** 가장 최근에 기록한 실패 하나를 지운다. 시도 전에 미리 기록한 실패가 실패가 아니었을 때 쓴다. */
+	public void cancelLast(String key) {
+		Deque<Instant> recent = failures.get(key);
+		if (recent != null) {
+			synchronized (recent) {
+				recent.pollLast();
+			}
+		}
+	}
+
+	/** 기간이 지난 기록만 남은 키를 지운다(맵이 계속 커지지 않게). */
+	public void removeExpired(Duration longestWindow) {
+		Instant threshold = clock.instant().minus(longestWindow);
+		failures.values().forEach(recent -> {
+			synchronized (recent) {
+				while (!recent.isEmpty() && recent.peekFirst().isBefore(threshold)) {
+					recent.removeFirst();
+				}
+			}
+		});
+		failures.values().removeIf(recent -> {
+			synchronized (recent) {
+				return recent.isEmpty();
+			}
+		});
+	}
+
 	private void prune(Deque<Instant> recent, Policy policy) {
 		Instant threshold = clock.instant().minus(policy.window());
 		while (!recent.isEmpty() && recent.peekFirst().isBefore(threshold)) {

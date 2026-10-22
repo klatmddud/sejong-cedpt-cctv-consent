@@ -38,7 +38,7 @@ class CourseDeletionServiceTest extends PostgresTestSupport {
 		byte[] xlsx = RosterWorkbookFixture.workbook(RosterTestFixtures.TITLE, 45, List.of(
 				FixtureCourse.of("000304-001", "센B201", "20010001", "20010002"),
 				FixtureCourse.of("000305-001", "센B202", "20010001")));
-		importService.importRoster(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx)),
+		importService.importRoster(importService.read(List.of(new RosterImportService.UploadedFile("명부.xlsx", xlsx))),
 				List.of());
 		semesterId = semesters.findByYearAndTerm(2026, "2").orElseThrow().getId();
 		sign("000304-001", "20010001");

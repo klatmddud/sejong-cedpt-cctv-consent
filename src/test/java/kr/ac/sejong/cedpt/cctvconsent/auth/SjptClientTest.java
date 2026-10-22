@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SjptClientTest {
@@ -18,6 +19,17 @@ class SjptClientTest {
 					assertThat(ex.getReason()).isEqualTo(SejongAuthException.Reason.UNEXPECTED_RESPONSE);
 					assertThat(ex.getMessage()).contains("/sch/doList.do", "NullPointerException");
 				});
+	}
+
+	@ParameterizedTest
+	@NullAndEmptySource
+	@ValueSource(strings = " ")
+	void rejectsBlankCredentialsWithoutCallingPortal(String blank) {
+		assertThatThrownBy(() -> new SjptClient().courses(blank, "password"))
+				.isInstanceOfSatisfying(SejongAuthException.class,
+						ex -> assertThat(ex.getReason()).isEqualTo(SejongAuthException.Reason.INVALID_CREDENTIALS));
+		assertThatThrownBy(() -> new SjptClient().courses("20010001", blank))
+				.isInstanceOf(SejongAuthException.class);
 	}
 
 	@ParameterizedTest

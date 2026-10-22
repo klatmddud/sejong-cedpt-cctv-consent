@@ -29,7 +29,8 @@ class TargetRoomsTest {
 
 	@Test
 	void returnsTargetPartsAsWritten() {
-		assertThat(targetRooms.matching("센B201/ 센B202 /호302")).containsExactly("센B201", "센B202");
+		assertThat(targetRooms.matching("센B201/ 센b202 /호302/B201")).containsExactly(
+				new TargetRooms.Room("B201", "센B201"), new TargetRooms.Room("B202", "센b202"));
 		assertThat(targetRooms.matching("센B209")).isEmpty();
 		assertThat(targetRooms.matching(null)).isEmpty();
 	}
