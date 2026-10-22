@@ -451,7 +451,7 @@ td.file {
 	border-bottom: 0;
 }
 
-.course-line:has(input:checked) {
+.course-line:not(.course-table-head):has(input:checked) {
 	background: var(--accent-tint);
 }
 

@@ -47,7 +47,9 @@
 				</div>
 				<div class="course-table">
 					<div class="course-line course-table-head">
-						<span class="course-check"></span>
+						<label class="course-check">
+							<input type="checkbox" class="select-room" th:attr="aria-label=|${group.room} 전체 선택|">
+						</label>
 						<span class="course-cols">
 							<span>강의실</span>
 							<span>학수번호</span>
