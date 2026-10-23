@@ -9,9 +9,9 @@
 	<link rel="stylesheet" th:href="@{/css/student.css}">
 </head>
 <body>
-<!--/* 교표 자리. 원본 파일을 받으면 이 span을 <img class="brand-mark" th:src="@{/img/파일이름}" alt="">로 바꾼다.
+<!--/* 교표. 빨간 상단 바에는 흰색(sejong-seal-white.svg), 밝은 바탕에는 빨간색(sejong-seal.svg)을 넘긴다.
 	옆 글자(또는 언어 선택 화면 제목)가 학교 이름을 읽어 주므로 alt는 비워 둔다. 상단 바와 언어 선택 화면이 함께 쓴다 */-->
-<span th:fragment="brandMark" class="brand-mark" aria-hidden="true">세종</span>
+<img th:fragment="brandMark(file)" class="brand-mark" th:src="@{/img/{file}(file=${file})}" alt="">
 
 <!--/* 언어 바꾸기. 지금 화면 주소에 ?lang=만 붙인다. 다른 주소 값은 student-nav.js가 유지한다 */-->
 <a th:fragment="langSwitch" class="lang-switch" th:href="@{''(lang=#{language.switch.lang})}"
@@ -24,7 +24,7 @@
 <header th:fragment="nav(student)" class="topbar">
 	<div class="topbar-inner">
 		<a class="brand" th:href="${student != null} ? @{/consents} : @{/}">
-			<span th:replace="~{student/fragments :: brandMark}"></span>
+			<img th:replace="~{student/fragments :: brandMark('sejong-seal-white.svg')}">
 			<span class="brand-text">
 				<span class="brand-eyebrow" th:text="#{nav.eyebrow}">세종대학교 컴퓨터공학과</span>
 				<span class="brand-name" th:text="#{app.title}">CCTV 촬영 동의</span>

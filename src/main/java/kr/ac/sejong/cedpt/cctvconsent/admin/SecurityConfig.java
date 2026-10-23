@@ -65,7 +65,7 @@ class SecurityConfig {
 		http.headers(SecurityConfig::securityHeaders)
 				.authenticationManager(new ProviderManager(byUsername(students, admins)))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/", "/login", "/css/**", "/js/**", "/actuator/health", "/error").permitAll()
+						.requestMatchers("/", "/login", "/css/**", "/js/**", "/img/**", "/actuator/health", "/error").permitAll()
 						.requestMatchers("/admin/**").hasRole("ADMIN")
 						.requestMatchers("/consents/**").hasRole("STUDENT")
 						.anyRequest().denyAll())

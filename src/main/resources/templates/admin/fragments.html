@@ -10,9 +10,8 @@
 <header th:fragment="nav(active)" class="topbar">
 	<div class="topbar-inner">
 		<a class="brand" th:href="@{/admin}">
-			<!--/* 교표 자리. 원본 파일을 받으면 이 span을 <img class="brand-mark" th:src="@{/img/파일이름}" alt="">로 바꾼다.
-				옆 글자가 학교 이름을 읽어 주므로 alt는 비워 둔다 */-->
-			<span class="brand-mark" aria-hidden="true">세종</span>
+			<!--/* 교표. 옆 글자가 학교 이름을 읽어 주므로 alt는 비워 둔다 */-->
+			<img class="brand-mark" th:src="@{/img/sejong-seal.svg}" alt="">
 			<span class="brand-text">
 				<span class="brand-eyebrow">세종대학교 컴퓨터공학과</span>
 				<span class="brand-name">CCTV 동의서 관리</span>
