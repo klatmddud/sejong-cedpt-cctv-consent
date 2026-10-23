@@ -47,7 +47,7 @@ body {
 	flex-direction: column;
 	background: var(--bg);
 	color: var(--text);
-	font: 15px/1.6 Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+	font: 15px/1.6 "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
 	/* 한글은 어절 단위로 줄을 바꾼다 */
 	word-break: keep-all;
 	overflow-wrap: break-word;

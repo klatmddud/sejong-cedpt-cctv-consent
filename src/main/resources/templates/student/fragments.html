@@ -5,7 +5,8 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 	<meta name="theme-color" content="#b4002f">
 	<title th:text="#{${titleKey}} + ' · ' + #{app.title}">CCTV 촬영 동의</title>
-	<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+	<!--/* 가변 글꼴 판: 굵기 전체가 한 글꼴이고, 화면에 나온 글자 묶음만 받는다(정적 판은 굵기마다 약 780KB) */-->
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 	<link rel="stylesheet" th:href="@{/css/student.css}">
 </head>
 <body>
