@@ -202,7 +202,8 @@ class SecurityConfig {
 				}
 				try {
 					Authentication result = delegate.authenticate(authentication);
-					limiter.reset(key);
+					// 이번 시도만 되돌린다. reset하면 같은 IP(공유기)를 쓰는 다른 사람의 실패까지 지워져 한도가 다시 찬다
+					limiter.cancelLast(key);
 					audit.info("관리자 로그인 성공 [{}]", key.substring("admin-ip:".length()));
 					return result;
 				}

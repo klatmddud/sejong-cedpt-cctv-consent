@@ -32,9 +32,11 @@ import org.springframework.stereotype.Component;
  * 남의 학번으로 일부러 틀려 잠그는 공격은 학번별 제한만으로는 막을 수 없다(잠그는 것이 목적이므로). 서버 전체 실패가
  * 10분에 SPIKE개를 넘으면 공격으로 보고, 그동안은 IP당 한도를 PER_IP_UNDER_ATTACK으로 줄여 IP 하나로 잠글 수 있는
  * 학번 수를 줄이고 감사 로그에 남긴다. 완전히 막으려면 CAPTCHA가 필요하다.
- * 실패는 포털에 묻기 전에 확인과 함께 미리 센다(tryReserve). 동시에 보낸 요청이 모두 한도 확인을 통과하지 못하게 하고, 같은 학번 시도는
+ * 학번별 실패는 포털에 묻기 전에 확인과 함께 미리 센다(tryReserve). 동시에 보낸 요청이 모두 한도 확인을 통과하지 못하게 하고, 같은 학번 시도는
  * 한 번에 하나만, 포털 호출은 서버 전체에서 동시에 MAX_PORTAL_CALLS개까지만 보낸다(포털 응답을 기다리는 스레드가
  * 쌓이지 않게). 비밀번호가 틀린 것이 아니면(포털 장애 등) 미리 센 실패를 되돌린다.
+ * IP별 실패는 비밀번호가 틀린 것으로 확인된 뒤에 센다. 미리 세면 한 강의실 와이파이(같은 IP)에서 함께 로그인할 때 진행 중인
+ * 로그인만으로 한도가 차서 맞는 비밀번호도 잠긴다. 대신 동시에 몰리면 IP 한도를 포털 동시 호출 수만큼 넘을 수 있다.
  * 예외 메시지는 messages.properties의 코드이며 로그인 화면이 학생이 고른 언어로 바꿔 보여 준다.
  * 로그인에 성공하면 sjpt에서 받은 수강 과목을 반영한다. 반영에 실패해도 로그인은 성공시키고 이전 수강 정보로 보여 준다.
  */
@@ -88,13 +90,12 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 				throw new LockedException("login.error.locked");
 			}
 			LoginAttemptLimiter.Policy ipPolicy = limiter.isBlocked(ALL_STUDENTS, SPIKE) ? PER_IP_UNDER_ATTACK : PER_IP;
-			if (!limiter.tryReserve(ipKey, ipPolicy)) {
+			if (limiter.isBlocked(ipKey, ipPolicy)) {
 				limiter.cancelLast(studentKey);
 				throw new LockedException("login.error.locked");
 			}
 			if (!acquirePortalCall()) {
 				limiter.cancelLast(studentKey);
-				limiter.cancelLast(ipKey);
 				throw new AuthenticationServiceException("login.error.busy");
 			}
 			try {
@@ -124,21 +125,20 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 		}
 	}
 
-	/** studentKey, ipKey에 실패가 하나씩 미리 기록된 상태로 부른다. */
+	/** studentKey에 실패가 하나 미리 기록된 상태로 부른다. ipKey에는 비밀번호가 틀렸을 때만 기록한다. */
 	private StudentLogin askPortal(String studentId, String password, String studentKey, String ipKey) {
 		try {
 			StudentLogin login = authenticator.authenticate(studentId, password);
 			limiter.reset(studentKey);
-			limiter.cancelLast(ipKey);
 			return login;
 		}
 		catch (SejongAuthException ex) {
 			if (ex.getReason() == SejongAuthException.Reason.INVALID_CREDENTIALS) {
+				limiter.recordFailure(ipKey, PER_IP);
 				recordStudentFailure();
 				throw new BadCredentialsException("login.error.invalid");
 			}
 			limiter.cancelLast(studentKey);
-			limiter.cancelLast(ipKey);
 			if (ex.getReason() == SejongAuthException.Reason.ACCOUNT_RESTRICTED) {
 				throw new LockedException("login.error.restricted");
 			}
@@ -146,7 +146,6 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 		}
 		catch (RuntimeException ex) {
 			limiter.cancelLast(studentKey);
-			limiter.cancelLast(ipKey);
 			throw ex;
 		}
 	}

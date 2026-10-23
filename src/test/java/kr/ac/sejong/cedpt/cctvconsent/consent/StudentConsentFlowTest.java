@@ -2,6 +2,7 @@ package kr.ac.sejong.cedpt.cctvconsent.consent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -217,6 +218,50 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 			executor.shutdownNow();
 		}
 		verify(authenticator, times(1)).authenticate(id, "wrong");
+	}
+
+	@Test
+	void doesNotCountLoginsInProgressAgainstPerIpLimit() throws Exception {
+		String ip = "10.9.2.1";
+		String waiting = "20050001";
+		String other = "20050002";
+		when(authenticator.authenticate(anyString(), eq("wrong")))
+				.thenThrow(new SejongAuthException(SejongAuthException.Reason.INVALID_CREDENTIALS, "wrong"));
+		CountDownLatch portalCalled = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		when(authenticator.authenticate(waiting, "pw")).thenAnswer(invocation -> {
+			portalCalled.countDown();
+			release.await(5, TimeUnit.SECONDS);
+			return new StudentLogin(new SejongStudent(waiting, "홍길동"), TERM, List.of());
+		});
+		when(authenticator.authenticate(other, "pw"))
+				.thenReturn(new StudentLogin(new SejongStudent(other, "김철수"), TERM, List.of()));
+
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		try {
+			// IP 한도(30분에 10번)에 하나 모자라게 틀려 둔다
+			for (int i = 0; i < 9; i++) {
+				mvc.perform(loginFrom(ip, "2005%04d".formatted(100 + i), "wrong")).andExpect(unauthenticated());
+			}
+			// 한 강의실(같은 IP)에서 함께 로그인할 때: 포털 응답을 기다리는 로그인을 실패로 미리 세지 않는다
+			Future<?> first = executor.submit(() -> {
+				mvc.perform(loginFrom(ip, waiting, "pw")).andExpect(authenticated());
+				return null;
+			});
+			assertThat(portalCalled.await(5, TimeUnit.SECONDS)).isTrue();
+			mvc.perform(loginFrom(ip, other, "pw")).andExpect(authenticated());
+			release.countDown();
+			first.get(5, TimeUnit.SECONDS);
+
+			// 비밀번호가 틀린 것은 센다: 열 번째에서 한도가 찬다
+			mvc.perform(loginFrom(ip, "20050200", "wrong")).andExpect(unauthenticated());
+			mvc.perform(loginFrom(ip, "20050201", "wrong")).andExpect(unauthenticated());
+			verify(authenticator, never()).authenticate("20050201", "wrong");
+		}
+		finally {
+			executor.shutdownNow();
+			limiter.reset("student-all");
+		}
 	}
 
 	@Test

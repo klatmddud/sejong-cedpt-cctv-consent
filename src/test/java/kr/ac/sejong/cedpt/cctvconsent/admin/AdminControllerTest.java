@@ -117,6 +117,18 @@ class AdminControllerTest extends PostgresTestSupport {
 	}
 
 	@Test
+	void successfulLoginKeepsOtherFailuresFromSameIp() throws Exception {
+		// 같은 공유기를 쓰는 다른 사람이 4번 틀린 뒤 관리자가 로그인해도, 그 4번은 남아 한도를 다시 채우지 않는다
+		for (int i = 0; i < 4; i++) {
+			loginFrom("10.0.0.11", ADMIN_USERNAME, "guess" + i).andExpect(unauthenticated());
+		}
+		loginFrom("10.0.0.11", ADMIN_USERNAME, ADMIN_PASSWORD).andExpect(authenticated().withRoles("ADMIN"));
+		loginFrom("10.0.0.11", ADMIN_USERNAME, "guess4").andExpect(unauthenticated());
+
+		loginFrom("10.0.0.11", ADMIN_USERNAME, ADMIN_PASSWORD).andExpect(unauthenticated());
+	}
+
+	@Test
 	void clearsEarlierFailureAfterSuccessfulLogin() throws Exception {
 		MockHttpSession session = new MockHttpSession();
 		mvc.perform(post("/login").session(session).param("username", ADMIN_USERNAME).param("password", "wrong")
