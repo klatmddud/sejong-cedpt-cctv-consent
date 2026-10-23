@@ -780,6 +780,21 @@ td .sub {
 	text-decoration: none;
 }
 
+/* 학기 표: 값 칸 네 개를 같은 폭으로 나누고 학기 칸에 붙여 둔다. 남는 폭은 초기화 칸이 가진다 */
+.semester-table .label {
+	width: 14%;
+}
+
+.semester-table .metric {
+	width: 17%;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.semester-table .action {
+	text-align: right;
+}
+
 .room-chip {
 	padding: 2px 8px;
 	border: 1px solid var(--border);
@@ -1022,22 +1037,40 @@ td .sub {
 	flex: 1.4 1 480px;
 }
 
-.room-rates {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	margin: 0;
-	padding: 0;
-	list-style: none;
-}
-
+/* 강의실별 제출률: '제출률 낮은 강의' 표처럼 머리글과 행 구분선으로 강의실을 나눈다 */
+.room-rates-head,
 .room-rates a {
 	display: grid;
 	grid-template-columns: 64px minmax(0, 1fr) 112px;
 	align-items: center;
 	gap: 12px;
-	padding: 10px;
-	border-radius: 10px;
+	padding: 14px 8px;
+}
+
+.room-rates-head {
+	margin: 0 -8px;
+	padding-block: 8px;
+	border-bottom: 1px solid var(--border);
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.room-rates-head > :last-child {
+	text-align: right;
+}
+
+.room-rates {
+	margin: 0 -8px;
+	padding: 0;
+	list-style: none;
+}
+
+.room-rates li {
+	border-bottom: 1px solid var(--border-soft);
+}
+
+.room-rates a {
 	color: inherit;
 	font-size: 14px;
 	text-decoration: none;

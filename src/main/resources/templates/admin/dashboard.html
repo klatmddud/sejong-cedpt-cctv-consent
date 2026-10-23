@@ -105,16 +105,23 @@
 					<h2>강의실별 제출률</h2>
 					<span class="muted small">누르면 시간표로 이동</span>
 				</div>
-				<ul class="room-rates">
-					<li th:each="room : *{rooms}">
-						<a th:href="@{/admin/semesters/{id}(id=*{semester.id}, view='timetable', room=${room.room})}">
-							<span class="room-rate-name" th:text="${room.room}">센B201</span>
-							<span class="rate-bar"><span th:style="|width: ${room.rate}%|"></span></span>
-							<span class="room-rate-value"><strong th:text="|${room.rate}%|">21%</strong>
-								<span class="muted" th:text="|${room.submitted}/${room.total}|">61/291</span></span>
-						</a>
-					</li>
-				</ul>
+				<!--/* 옆의 '제출률 낮은 강의' 표와 같은 머리글. 각 행의 링크 글자가 값을 다 읽어 주므로 스크린리더에서는 숨긴다.
+					카드의 항목 간격이 머리글과 목록 사이에 생기지 않도록 둘을 한 div로 묶는다 */-->
+				<div>
+					<div class="room-rates-head" aria-hidden="true">
+						<span>강의실</span><span>제출 진행</span><span>제출률</span>
+					</div>
+					<ul class="room-rates">
+						<li th:each="room : *{rooms}">
+							<a th:href="@{/admin/semesters/{id}(id=*{semester.id}, view='timetable', room=${room.room})}">
+								<span class="room-rate-name" th:text="${room.room}">센B201</span>
+								<span class="rate-bar"><span th:style="|width: ${room.rate}%|"></span></span>
+								<span class="room-rate-value"><strong th:text="|${room.rate}%|">21%</strong>
+									<span class="muted" th:text="|${room.submitted}/${room.total}|">61/291</span></span>
+							</a>
+						</li>
+					</ul>
+				</div>
 			</section>
 			<section class="card">
 				<h2>제출률 낮은 강의</h2>
@@ -187,25 +194,26 @@
 			등록된 학기가 없습니다. <a th:href="@{/admin/roster}">명부 업로드</a>에서 수강명부를 올리세요.
 		</p>
 		<div class="table-wrap" th:unless="${#lists.isEmpty(semesters)}">
-			<table>
+			<!--/* 수업 · 동의 대상 · 학기 종료일 · 파기 예정일은 같은 폭의 칸에 가운데 정렬해 간격을 맞춘다 */-->
+			<table class="semester-table">
 				<thead>
 				<tr>
-					<th>학기</th>
-					<th class="num">수업</th>
-					<th class="num">동의 대상</th>
-					<th>학기 종료일</th>
-					<th>동의서 파기 예정일</th>
-					<th><span class="visually-hidden">초기화</span></th>
+					<th class="label">학기</th>
+					<th class="metric">수업</th>
+					<th class="metric">동의 대상</th>
+					<th class="metric">학기 종료일</th>
+					<th class="metric">동의서 파기 예정일</th>
+					<th class="action"><span class="visually-hidden">초기화</span></th>
 				</tr>
 				</thead>
 				<tbody>
 				<tr th:each="semester : ${semesters}">
 					<td><a class="strong-link" th:href="@{/admin/semesters/{id}(id=${semester.id})}" th:text="${semester.label()}">2026-2학기</a></td>
-					<td class="num" th:text="${semester.courseCount}">56</td>
-					<td class="num" th:text="${semester.enrollmentCount}">1789</td>
-					<td class="tabular" th:text="${semester.endsOn}">2026-12-21</td>
-					<td class="tabular" th:text="${semester.purgeOn}">2027-12-21</td>
-					<td class="num">
+					<td class="metric" th:text="${semester.courseCount}">56</td>
+					<td class="metric" th:text="${semester.enrollmentCount}">1789</td>
+					<td class="metric" th:text="${semester.endsOn}">2026-12-21</td>
+					<td class="metric" th:text="${semester.purgeOn}">2027-12-21</td>
+					<td class="action">
 						<button type="button" class="button outline-danger small" th:attr="data-dialog=|reset-${semester.id}|">초기화</button>
 					</td>
 				</tr>
