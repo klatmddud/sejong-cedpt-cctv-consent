@@ -101,6 +101,17 @@ class RosterParserTest {
 	}
 
 	@Test
+	void rejectsCodeLongerThanColumn() {
+		// 저장할 때 DB 오류(500)가 나지 않도록 읽을 때 거른다
+		byte[] xlsx = RosterWorkbookFixture.workbook(TITLE, 45,
+				List.of(FixtureCourse.of("000304-001-0123456789", "센B201", "20010001")));
+
+		assertThatThrownBy(() -> RosterParser.parse(new ByteArrayInputStream(xlsx)))
+				.isInstanceOf(RosterParseException.class)
+				.hasMessageContaining("20자");
+	}
+
+	@Test
 	void rejectsWorkbookThatIsNotARoster() {
 		byte[] xlsx = RosterWorkbookFixture.workbook("일반 문서", 45, List.of());
 

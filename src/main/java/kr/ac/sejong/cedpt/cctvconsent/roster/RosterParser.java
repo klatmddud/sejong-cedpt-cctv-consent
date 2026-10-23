@@ -39,6 +39,13 @@ public final class RosterParser {
 	private static final Pattern GRADING_SUFFIX = Pattern.compile("\\s*\\((GRADE|P/NP|P/F)\\)\\s*$", Pattern.CASE_INSENSITIVE);
 	private static final Set<String> LABELS = Set.of(
 			"과목명", "개설학과", "학점", "강의", "실습", "담당교수", "이수구분", "강의시간", "강의실", "수강인원");
+	// V1__roster.sql의 칸 길이. 넘으면 저장할 때 실패하므로 읽을 때 어느 줄인지 알려 준다.
+	// 과목명, 교수, 강의시간, 강의실은 Course.update가 잘라서 저장한다
+	private static final int MAX_TERM = 10;
+	private static final int MAX_CODE = 20;
+	private static final int MAX_STUDENT_NAME = 100;
+	private static final int MAX_DEPARTMENT = 100;
+	private static final int MAX_GRADE = 10;
 
 	private RosterParser() {
 	}
@@ -129,6 +136,9 @@ public final class RosterParser {
 			if (code == null) {
 				throw new RosterParseException("과목명 행에 학수번호가 없습니다.");
 			}
+			if (code.length() > MAX_CODE) {
+				throw new RosterParseException("학수번호가 " + MAX_CODE + "자를 넘습니다: " + code.substring(0, MAX_CODE) + "…");
+			}
 			current = courses.computeIfAbsent(code, CourseBuilder::new);
 			expectingName = true;
 			studentColumns = null;
@@ -172,11 +182,19 @@ public final class RosterParser {
 			if (name == null) {
 				throw new RosterParseException(current.code + " 과목의 학번 " + studentId + " 학생 성명이 비어 있습니다.");
 			}
-			current.students.putIfAbsent(studentId, new RosterFile.Student(
-					studentId,
-					name,
-					textAt(row, studentColumns.get("학과(부)")),
-					textAt(row, studentColumns.get("학년"))));
+			String department = textAt(row, studentColumns.get("학과(부)"));
+			String grade = textAt(row, studentColumns.get("학년"));
+			requireLength(studentId, "성명", name, MAX_STUDENT_NAME);
+			requireLength(studentId, "학과(부)", department, MAX_DEPARTMENT);
+			requireLength(studentId, "학년", grade, MAX_GRADE);
+			current.students.putIfAbsent(studentId, new RosterFile.Student(studentId, name, department, grade));
+		}
+
+		private void requireLength(String studentId, String label, String value, int max) {
+			if (value != null && value.length() > max) {
+				throw new RosterParseException(
+						current.code + " 과목의 학번 " + studentId + " 학생 " + label + "이(가) " + max + "자를 넘습니다.");
+			}
 		}
 
 		private void requireCourse() {
@@ -195,6 +213,9 @@ public final class RosterParser {
 			Matcher title = TITLE.matcher(titles.iterator().next());
 			if (!title.find()) {
 				throw new RosterParseException("제목에서 학기를 읽을 수 없습니다: " + titles.iterator().next());
+			}
+			if (title.group(2).length() > MAX_TERM) {
+				throw new RosterParseException("제목의 학기가 " + MAX_TERM + "자를 넘습니다: " + titles.iterator().next());
 			}
 
 			List<String> problems = new ArrayList<>();
