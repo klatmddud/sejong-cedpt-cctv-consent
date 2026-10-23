@@ -57,7 +57,7 @@ class SecurityConfig {
 	private static final Pattern LETTER = Pattern.compile("[A-Za-z]");
 
 	private static final LoginAttemptLimiter.Policy ADMIN_PER_IP = new LoginAttemptLimiter.Policy(5, Duration.ofMinutes(15));
-	// BCrypt(cost 14) 한 번이 작은 서버에서 1초 가까이 걸린다. 로그인 없이 보낼 수 있는 요청이라 동시에 몇 개까지만 돌린다
+	// BCrypt(cost 12) 한 번이 작은 서버에서 1초 안팎 걸린다(cost 14는 3~6초). 로그인 없이 보낼 수 있는 요청이라 동시에 몇 개까지만 돌린다
 	private static final int MAX_PASSWORD_CHECKS = 2;
 	private static final Duration PASSWORD_CHECK_WAIT = Duration.ofSeconds(2);
 

@@ -23,9 +23,10 @@ Oracle Cloud Ubuntu 24.04 (x86_64, RAM 1GB, swap 4GB) 한 대에 컨테이너 3�
 담당자가 바뀌면 같은 방법으로 비밀번호를 바꾼다.
 
 1. 서버에서 해시를 만든다. 비밀번호를 두 번 입력하면 `$2a$14$...` 형태의 해시가 출력된다.
-   입력한 비밀번호는 화면과 셸 기록에 남지 않는다.
+   입력한 비밀번호는 화면과 셸 기록에 남지 않는다. cost는 12로 한다. Caddy 기본값(14)은 이 서버에서 확인 한 번이
+   3~6초 걸려 로그인이 느려진다(12는 1초 안팎).
    ```bash
-   docker exec -it caddy caddy hash-password
+   docker exec -it caddy caddy hash-password --bcrypt-cost 12
    ```
 2. `~/cctv-consent/app.env`를 열어(`nano ~/cctv-consent/app.env`) 아래 두 줄을 넣거나 바꾼다.
    ```
