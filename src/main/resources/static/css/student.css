@@ -1148,10 +1148,13 @@ body.landing {
 	display: none;
 }
 
+/* 동의 내용 · 제출 일시 · PDF 링크를 같은 간격으로 한 줄에 둔다. 좁으면 다음 줄로 내려간다 */
 .detail-body {
 	display: flex;
-	flex-direction: column;
-	gap: 12px;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 24px;
 	margin-top: 12px;
 	padding: 14px;
 	background: var(--surface-muted);
@@ -1161,11 +1164,9 @@ body.landing {
 	animation: open 220ms ease-out both;
 }
 
+/* dl의 항목도 PDF 링크와 같은 줄의 형제로 배치해 세 간격을 같게 한다 */
 .detail-body dl {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
-	gap: 12px;
-	margin: 0;
+	display: contents;
 }
 
 .detail-body dl div {
@@ -1185,38 +1186,10 @@ body.landing {
 	font-weight: 500;
 }
 
-.detail-body dd.highlight {
-	color: var(--accent);
-	font-weight: 600;
-}
-
-.detail-body .signature {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 8px;
-}
-
-.detail-body .signature img {
-	display: block;
-	width: auto;
-	max-width: 100%;
-	height: 56px;
-	background: var(--surface);
-	border: 1px solid var(--border-soft);
-	border-radius: 8px;
-}
-
-.detail-body .signature span {
-	color: var(--muted);
-	font-size: 13px;
-}
-
 .pdf-link {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	align-self: flex-start;
 	min-height: 44px;
 	font-size: 14px;
 	font-weight: 600;

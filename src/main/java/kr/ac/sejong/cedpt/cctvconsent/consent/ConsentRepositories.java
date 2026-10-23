@@ -20,11 +20,6 @@ interface ConsentRepository extends JpaRepository<Consent, Long> {
 }
 
 interface ConsentDocumentRepository extends JpaRepository<ConsentDocument, Long> {
-
-	/** 서명 이미지만 읽는다(PDF까지 읽지 않게) */
-	@Query("select d.signaturePng from ConsentDocument d where d.id = :consentId")
-	Optional<byte[]> findSignaturePng(long consentId);
-
 }
 
 /** 학생 본인이 동의할 수 있는 수강: 최신 명부 또는 sjpt에서 확인됐고 학기가 끝나지 않은 것. */

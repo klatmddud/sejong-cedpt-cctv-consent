@@ -85,7 +85,6 @@
 						<span class="status todo" th:unless="${course.signed()}" th:text="#{courses.todo}">미제출</span>
 					</div>
 
-					<!--/* 펼치기 전에는 서명 이미지를 받지 않는다(닫힌 details 안의 loading="lazy" 이미지) */-->
 					<details class="consent-detail" th:if="${course.signed()}">
 						<summary>
 							<span class="summary-label">
@@ -102,24 +101,11 @@
 									<dd th:text="#{courses.detail.consentValue}">개인 영상정보의 수집·이용·제공 동의</dd>
 								</div>
 								<div>
-									<dt th:text="#{courses.detail.retention}">보유 기간</dt>
-									<dd class="highlight" th:text="#{courses.detail.retentionValue}">60일 보관 후 폐기</dd>
-								</div>
-								<div>
 									<dt th:text="#{courses.detail.signedAt}">제출 일시</dt>
 									<dd class="tabular"
 										th:with="signedAt=${course.signedAt.atZoneSameInstant(T(java.time.ZoneId).of('Asia/Seoul'))}">
 										<time th:datetime="${#temporals.formatISO(signedAt)}"
 											  th:text="${#temporals.format(signedAt, 'yyyy-MM-dd HH:mm')}">2026-09-01 10:00</time>
-									</dd>
-								</div>
-								<div>
-									<dt th:text="#{courses.detail.signature}">서명</dt>
-									<dd class="signature">
-										<img loading="lazy" decoding="async"
-											 th:src="@{/consents/{id}/signature(id=${course.enrollmentId})}"
-											 th:alt="#{courses.detail.signatureAlt(${course.signerName})}">
-										<span th:text="${course.signerName}">[이름]</span>
 									</dd>
 								</div>
 							</dl>

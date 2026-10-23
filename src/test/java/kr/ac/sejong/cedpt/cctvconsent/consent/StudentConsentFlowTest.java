@@ -15,7 +15,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -330,26 +329,6 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	@Test
 	void consentPagesRequireStudentLogin() throws Exception {
 		mvc.perform(get("/consents")).andExpect(redirectedUrl("/login"));
-	}
-
-	@Test
-	void showsOwnSignatureOnly() throws Exception {
-		long mine = enrollmentId(STUDENT, "000304-001");
-		submit(STUDENT, mine);
-
-		byte[] png = mvc.perform(get("/consents/" + mine + "/signature").with(student(STUDENT)))
-				.andExpect(status().isOk())
-				.andExpect(content().contentType("image/png"))
-				.andExpect(header().string("Cache-Control", Matchers.containsString("no-store")))
-				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
-				.andReturn().getResponse().getContentAsByteArray();
-		assertThat(png).startsWith(0x89, 'P', 'N', 'G');
-
-		// 같은 수업을 듣는 다른 학생도 남의 서명은 볼 수 없다. 아직 제출하지 않은 자기 수강도 없다
-		mvc.perform(get("/consents/" + mine + "/signature").with(student(OTHER))).andExpect(status().isNotFound());
-		mvc.perform(get("/consents/" + enrollmentId(OTHER, "000304-001") + "/signature").with(student(OTHER)))
-				.andExpect(status().isNotFound());
-		mvc.perform(get("/consents/" + mine + "/signature")).andExpect(redirectedUrl("/login"));
 	}
 
 	@Test

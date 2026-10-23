@@ -25,8 +25,7 @@ public class ConsentService {
 	private static final int MAX_COURSES_PER_SUBMIT = 30;
 
 	public record CourseConsent(long enrollmentId, String semester, String courseCode, String courseName,
-			String professor, String schedule, String room, OffsetDateTime signedAt, ConsentLanguage language,
-			String signerName) {
+			String professor, String schedule, String room, OffsetDateTime signedAt, ConsentLanguage language) {
 
 		public boolean signed() {
 			return signedAt != null;
@@ -116,14 +115,6 @@ public class ConsentService {
 		return new PdfFile("CCTV동의서_" + enrollment.getCourse().getName() + ".pdf", pdf);
 	}
 
-	/** 제출한 동의서의 서명 이미지(PNG). 접근 조건은 pdf와 같다. */
-	@Transactional(readOnly = true)
-	public byte[] signature(String studentId, long enrollmentId) {
-		Consent consent = consents.findByEnrollment(openEnrollment(studentId, enrollmentId))
-				.orElseThrow(NotFoundException::new);
-		return documents.findSignaturePng(consent.getId()).orElseThrow(NotFoundException::new);
-	}
-
 	private Enrollment openEnrollment(String studentId, long enrollmentId) {
 		return enrollments.findOpenById(enrollmentId, studentId, today()).orElseThrow(NotFoundException::new);
 	}
@@ -133,8 +124,7 @@ public class ConsentService {
 		return new CourseConsent(enrollment.getId(),
 				course.getSemester().getYear() + "-" + course.getSemester().getTerm() + "학기",
 				course.getCode(), course.getName(), course.getProfessor(), course.getSchedule(), course.getRoom(),
-				consent == null ? null : consent.getSignedAt(), consent == null ? null : consent.getLanguage(),
-				consent == null ? null : consent.getSignerName());
+				consent == null ? null : consent.getSignedAt(), consent == null ? null : consent.getLanguage());
 	}
 
 	private static LocalDate today() {

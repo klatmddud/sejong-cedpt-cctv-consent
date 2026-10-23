@@ -158,13 +158,4 @@ class StudentConsentController {
 				.body(file.content());
 	}
 
-	/** 내 수업에서 제출한 동의서를 펼칠 때 보여 주는 서명. 접근 조건은 PDF와 같다(남의 수강이면 404). */
-	@GetMapping("/consents/{enrollmentId}/signature")
-	ResponseEntity<byte[]> signature(@AuthenticationPrincipal StudentPrincipal student, @PathVariable long enrollmentId) {
-		// Cache-Control: no-store, X-Content-Type-Options: nosniff는 Spring Security 기본 헤더가 붙인다
-		return ResponseEntity.ok()
-				.contentType(MediaType.IMAGE_PNG)
-				.body(consents.signature(student.studentId(), enrollmentId));
-	}
-
 }
