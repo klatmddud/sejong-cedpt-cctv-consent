@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.consent.ConsentBundleService;
@@ -18,7 +17,6 @@ import kr.ac.sejong.cedpt.cctvconsent.roster.TargetRooms;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -119,25 +117,25 @@ class AdminController {
 	}
 
 	/**
-	 * 고른 과목들의 동의서를 PDF 하나로 내려준다. 과목마다 시작, 끝 표지가 들어간다.
-	 * 파일이 클 수 있어 임시 파일로 만든 뒤 그대로 흘려보내고 지운다.
+	 * 고른 과목들의 동의서를 내려준다. 과목 하나면 PDF, 여럿이면 과목별 PDF를 담은 ZIP이다. 과목마다 시작, 끝 표지가 들어간다.
+	 * 과목 PDF를 하나씩 만들어 바로 흘려보내고 지운다.
 	 *
-	 * @return 고른 과목이 없을 때만 학기 화면으로 돌려보낸다. 내려줬으면 null(응답을 직접 씀)
+	 * @return 고른 과목이 없거나 다른 다운로드를 만드는 중이면 학기 화면으로 돌려보낸다. 내려줬으면 null(응답을 직접 씀)
 	 */
 	@PostMapping("/semesters/{id}/consents/download")
 	String downloadConsents(@PathVariable long id, @RequestParam(name = "codes", required = false) List<String> codes,
 			HttpServletResponse response, RedirectAttributes redirect) throws IOException {
-		try (ConsentBundleService.Bundle bundle = bundles.bundle(id, codes == null ? List.of() : codes)) {
-			response.setContentType(MediaType.APPLICATION_PDF_VALUE);
-			response.setContentLengthLong(Files.size(bundle.file()));
+		try (ConsentBundleService.Download download = bundles.open(id, codes == null ? List.of() : codes)) {
+			response.setContentType(download.contentType());
 			response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
-					ContentDisposition.attachment().filename(bundle.fileName(), StandardCharsets.UTF_8).build().toString());
-			AdminAudit.log("동의서 일괄 다운로드: 학기 {}, 과목 {}개, 동의서 {}건", id, bundle.courseCount(),
-					bundle.consentCount());
-			Files.copy(bundle.file(), response.getOutputStream());
+					ContentDisposition.attachment().filename(download.fileName(), StandardCharsets.UTF_8).build().toString());
+			// 만들면서 바로 보내므로 길이를 미리 알 수 없다(chunked)
+			download.writeTo(response.getOutputStream());
+			AdminAudit.log("동의서 일괄 다운로드: 학기 {}, 과목 {}개, 동의서 {}건", id, download.courseCount(),
+					download.consentCount());
 			return null;
 		}
-		catch (ConsentBundleService.NoCourseException ex) {
+		catch (ConsentBundleService.NoCourseException | ConsentBundleService.BusyException ex) {
 			redirect.addAttribute("id", id);
 			redirect.addFlashAttribute("error", ex.getMessage());
 			return "redirect:/admin/semesters/{id}";

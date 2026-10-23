@@ -209,7 +209,7 @@ class AdminControllerTest extends PostgresTestSupport {
 	}
 
 	@Test
-	void downloadsSelectedCoursesAsOnePdf() throws Exception {
+	void downloadsOneCourseAsPdfAndSeveralAsZip() throws Exception {
 		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, RosterTestFixtures.roster(List.of(
 				RosterTestFixtures.course("000304-001", "센B201", "20010001"),
 				RosterTestFixtures.course("000400-001", "센B203", "20010003"))));
@@ -219,15 +219,33 @@ class AdminControllerTest extends PostgresTestSupport {
 		mvc.perform(get("/admin/semesters/{id}", semesterId).with(user("admin").roles("ADMIN")))
 				.andExpect(content().string(Matchers.containsString("name=\"codes\" value=\"000304-001\"")));
 
-		byte[] pdf = mvc.perform(post("/admin/semesters/{id}/consents/download", semesterId)
+		byte[] zip = mvc.perform(post("/admin/semesters/{id}/consents/download", semesterId)
 						.param("codes", "000304-001", "000400-001", "000304-001")
 						.with(user("admin").roles("ADMIN")).with(csrf()))
 				.andExpect(status().isOk())
-				.andExpect(content().contentType("application/pdf"))
+				.andExpect(content().contentType("application/zip"))
 				.andExpect(header().string("Content-Disposition", Matchers.startsWith("attachment;")))
+				.andExpect(header().string("Content-Disposition", Matchers.containsString(".zip")))
+				.andReturn().getResponse().getContentAsByteArray();
+		List<String> names = new java.util.ArrayList<>();
+		try (var in = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(zip))) {
+			for (var entry = in.getNextEntry(); entry != null; entry = in.getNextEntry()) {
+				names.add(entry.getName());
+				try (var document = org.apache.pdfbox.Loader.loadPDF(in.readAllBytes())) {
+					assertThat(document.getNumberOfPages()).isEqualTo(2);
+				}
+			}
+		}
+		assertThat(names).containsExactly("01_000304-001_과목000304-001.pdf", "02_000400-001_과목000400-001.pdf");
+
+		byte[] pdf = mvc.perform(post("/admin/semesters/{id}/consents/download", semesterId)
+						.param("codes", "000400-001")
+						.with(user("admin").roles("ADMIN")).with(csrf()))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType("application/pdf"))
 				.andReturn().getResponse().getContentAsByteArray();
 		try (var document = org.apache.pdfbox.Loader.loadPDF(pdf)) {
-			assertThat(document.getNumberOfPages()).isEqualTo(4);
+			assertThat(document.getNumberOfPages()).isEqualTo(2);
 		}
 
 		mvc.perform(post("/admin/semesters/{id}/consents/download", semesterId)

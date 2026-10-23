@@ -107,7 +107,7 @@
 		update();
 	}));
 	search.addEventListener('input', filter);
-	// 검색 칸에서 Enter를 눌러도 PDF 받기가 제출되지 않게 한다
+	// 검색 칸에서 Enter를 눌러도 동의서 받기가 제출되지 않게 한다
 	search.addEventListener('keydown', (event) => {
 		if (event.key === 'Enter') {
 			event.preventDefault();
