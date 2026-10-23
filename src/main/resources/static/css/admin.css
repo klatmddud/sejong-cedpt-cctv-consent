@@ -1341,11 +1341,26 @@ dialog.list-dialog[open] {
 	gap: 8px;
 }
 
+/* 두 카드 높이를 맞추고, 파일 올리기 카드는 남는 높이를 끌어다 놓기 영역이 채운다(아래가 비어 보이지 않게) */
 .roster-columns {
 	display: flex;
 	flex-wrap: wrap;
-	align-items: flex-start;
+	align-items: stretch;
 	gap: 20px;
+}
+
+.roster-columns form.upload {
+	flex: 1;
+}
+
+.roster-columns .dropzone {
+	display: flex;
+	flex: 1;
+}
+
+.roster-columns .dropzone label {
+	flex: 1;
+	justify-content: center;
 }
 
 .roster-columns > :first-child {
@@ -1378,6 +1393,8 @@ form.upload {
 	gap: 8px;
 	padding: 36px 20px;
 	text-align: center;
+	/* 좁은 화면에서 "놓으세 / 요"처럼 낱말 중간에서 줄이 바뀌지 않게 */
+	word-break: keep-all;
 	cursor: pointer;
 }
 
