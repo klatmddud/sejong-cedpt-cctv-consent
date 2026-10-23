@@ -42,4 +42,8 @@ public class ConsentDocument {
 		return pdf;
 	}
 
+	public byte[] getSignaturePng() {
+		return signaturePng;
+	}
+
 }

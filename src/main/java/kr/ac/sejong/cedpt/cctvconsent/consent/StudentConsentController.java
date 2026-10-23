@@ -149,8 +149,9 @@ class StudentConsentController {
 	}
 
 	@GetMapping("/consents/{enrollmentId}/pdf")
-	ResponseEntity<byte[]> pdf(@AuthenticationPrincipal StudentPrincipal student, @PathVariable long enrollmentId) {
-		ConsentService.PdfFile file = consents.pdf(student.studentId(), enrollmentId);
+	ResponseEntity<byte[]> pdf(@AuthenticationPrincipal StudentPrincipal student, @PathVariable long enrollmentId,
+			Locale locale) {
+		ConsentService.PdfFile file = consents.pdf(student.studentId(), enrollmentId, ConsentLanguage.fromLocale(locale));
 		return ResponseEntity.ok()
 				.contentType(MediaType.APPLICATION_PDF)
 				.header(HttpHeaders.CONTENT_DISPOSITION,

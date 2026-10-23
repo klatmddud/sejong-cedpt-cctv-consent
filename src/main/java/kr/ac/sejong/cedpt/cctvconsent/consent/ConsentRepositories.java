@@ -36,6 +36,13 @@ interface StudentEnrollmentRepository extends Repository<Enrollment, Long> {
 			where e.id = :id and e.studentId = :studentId and (e.inLatestRoster = true or e.inSjpt = true) and s.endsOn >= :today""")
 	Optional<Enrollment> findOpenById(long id, String studentId, LocalDate today);
 
+	/** findOpenById를 여러 개 한 번에 세기만 한다. 제출할 때 서명을 읽기 전에 남의 수강인지 가볍게 거른다. */
+	@Query("""
+			select count(e) from Enrollment e join e.course c join c.semester s
+			where e.id in :ids and e.studentId = :studentId and (e.inLatestRoster = true or e.inSjpt = true)
+			and s.endsOn >= :today""")
+	long countOpenByIds(Collection<Long> ids, String studentId, LocalDate today);
+
 	/**
 	 * findOpenById를 여러 개 한 번에 하고, 제출이 끝날 때까지 수강 행을 잠가(FOR SHARE) 학기 초기화나 과목 삭제가 그 사이에
 	 * 지우지 못하게 한다. 명부 반영, sjpt 동기화(EnrollmentRepository.lockByIds, lockByCourse)와 교착하지 않도록 같은 id 순서로

@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -74,6 +75,9 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 
 	@MockitoBean
 	StudentAuthenticator authenticator;
+
+	@Autowired
+	kr.ac.sejong.cedpt.cctvconsent.auth.LoginAttemptLimiter limiter;
 
 	@BeforeEach
 	void setUp() {
@@ -142,6 +146,34 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 
 		// 네 번째는 세종대 포털에 보내지 않는다 (포털 계정 잠김 방지)
 		verify(authenticator, times(3)).authenticate(id, "wrong");
+	}
+
+	@Test
+	void tightensPerIpLimitWhileWrongPasswordsSpikeAcrossStudents() throws Exception {
+		when(authenticator.authenticate(anyString(), anyString()))
+				.thenThrow(new SejongAuthException(SejongAuthException.Reason.INVALID_CREDENTIALS, "wrong"));
+		try {
+			// 남의 학번을 잠그려는 공격: IP를 바꿔 가며 학번마다 한 번씩 틀린다. 서버 전체로 10분에 30번이면 급증으로 본다
+			for (int i = 0; i < 30; i++) {
+				mvc.perform(loginFrom("10.9.0." + i, "2003%04d".formatted(i), "wrong")).andExpect(unauthenticated());
+			}
+			// 급증 중에는 새 IP 하나가 학번 2개까지만 포털에 묻는다
+			for (int i = 1; i <= 3; i++) {
+				mvc.perform(loginFrom("10.9.1.1", "2004000" + i, "wrong")).andExpect(unauthenticated());
+			}
+			verify(authenticator).authenticate("20040002", "wrong");
+			verify(authenticator, never()).authenticate("20040003", "wrong");
+		}
+		finally {
+			limiter.reset("student-all");
+		}
+	}
+
+	private static org.springframework.test.web.servlet.RequestBuilder loginFrom(String ip, String id, String password) {
+		return post("/login").param("username", id).param("password", password).with(csrf()).with(request -> {
+			request.setRemoteAddr(ip);
+			return request;
+		});
 	}
 
 	@Test
@@ -273,6 +305,29 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	}
 
 	@Test
+	void englishScreenShowsEnglishPdfWithoutChangingStoredOne() throws Exception {
+		long enrollmentId = enrollmentId(STUDENT, "000304-001");
+		submit(STUDENT, enrollmentId);
+		byte[] stored = jdbc.queryForObject("select pdf from consent_document", byte[].class);
+
+		var response = mvc.perform(get("/consents/" + enrollmentId + "/pdf").with(student(STUDENT))
+						.cookie(new Cookie("lang", "en")))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType("application/pdf"))
+				.andReturn().getResponse();
+		assertThat(response.getHeader("Content-Disposition")).contains("CCTV_Consent_");
+		try (var document = Loader.loadPDF(response.getContentAsByteArray())) {
+			String text = new PDFTextStripper().getText(document);
+			assertThat(text).contains("Consent to CCTV Recording").contains("홍길동");
+		}
+
+		// 저장한 공식 기록은 한글본 그대로다
+		assertThat(jdbc.queryForObject("select pdf from consent_document", byte[].class)).isEqualTo(stored);
+		mvc.perform(get("/consents/" + enrollmentId + "/pdf").with(student(STUDENT)))
+				.andExpect(content().bytes(stored));
+	}
+
+	@Test
 	void showsErrorsInChosenLanguage() throws Exception {
 		long enrollmentId = enrollmentId(STUDENT, "000304-001");
 
@@ -329,6 +384,25 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	@Test
 	void consentPagesRequireStudentLogin() throws Exception {
 		mvc.perform(get("/consents")).andExpect(redirectedUrl("/login"));
+	}
+
+	@Test
+	void cachesVersionedStaticFilesButNeverPersonalPages() throws Exception {
+		String html = mvc.perform(get("/login")).andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", Matchers.containsString("no-store")))
+				.andReturn().getResponse().getContentAsString();
+		java.util.regex.Matcher css = java.util.regex.Pattern.compile("/css/student-[0-9a-f]{32}\\.css").matcher(html);
+		assertThat(css.find()).isTrue();
+		mvc.perform(get(css.group()))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", Matchers.containsString("max-age=31536000")));
+
+		long enrollmentId = enrollmentId(STUDENT, "000304-001");
+		submit(STUDENT, enrollmentId);
+		mvc.perform(get("/consents").with(student(STUDENT)))
+				.andExpect(header().string("Cache-Control", Matchers.containsString("no-store")));
+		mvc.perform(get("/consents/" + enrollmentId + "/pdf").with(student(STUDENT)))
+				.andExpect(header().string("Cache-Control", Matchers.containsString("no-store")));
 	}
 
 	@Test

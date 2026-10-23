@@ -24,12 +24,13 @@
 
 	function resize() {
 		// 화면 크기가 바뀌면 그린 내용이 늘어나 왜곡되므로 지우고 새로 맞춘다
-		const ratio = Math.max(window.devicePixelRatio || 1, 1);
+		// 3배 화면도 2배로만 그린다. PDF에 찍히는 크기에는 충분하고, 올리는 PNG와 서버의 이미지 처리가 절반 가까이 준다
+		const ratio = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
 		const rect = canvas.getBoundingClientRect();
 		canvas.width = Math.round(rect.width * ratio);
 		canvas.height = Math.round(rect.height * ratio);
 		context.setTransform(ratio, 0, 0, ratio, 0, 0);
-		context.lineWidth = 2.5;
+		context.lineWidth = 5;
 		context.lineCap = 'round';
 		context.lineJoin = 'round';
 		context.strokeStyle = '#111';

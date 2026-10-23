@@ -18,10 +18,16 @@ public final class SignatureFixtures {
 	}
 
 	public static byte[] png() {
-		BufferedImage image = new BufferedImage(600, 240, BufferedImage.TYPE_INT_ARGB);
+		return png(600, 240);
+	}
+
+	/** 같은 모양의 서명을 width×height 캔버스에 맞춰 그린다. */
+	public static byte[] png(int width, int height) {
+		BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = image.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		g.setColor(new Color(20, 20, 30));
+		g.scale(width / 600.0, height / 240.0);
 		g.setStroke(new BasicStroke(9, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 		g.drawPolyline(new int[] {60, 140, 190, 260, 330, 400, 470, 540}, new int[] {170, 60, 190, 70, 180, 80, 170, 90}, 8);
 		g.dispose();

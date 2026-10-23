@@ -13,6 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
@@ -44,13 +45,15 @@ public class ConsentService {
 	private final ConsentRepository consents;
 	private final ConsentDocumentRepository documents;
 	private final ConsentPdfRenderer renderer;
+	private final TransactionTemplate transactions;
 
 	ConsentService(StudentEnrollmentRepository enrollments, ConsentRepository consents,
-			ConsentDocumentRepository documents, ConsentPdfRenderer renderer) {
+			ConsentDocumentRepository documents, ConsentPdfRenderer renderer, TransactionTemplate transactions) {
 		this.enrollments = enrollments;
 		this.consents = consents;
 		this.documents = documents;
 		this.renderer = renderer;
+		this.transactions = transactions;
 	}
 
 	@Transactional(readOnly = true)
@@ -63,12 +66,14 @@ public class ConsentService {
 
 	/**
 	 * 선택한 수업들에 같은 서명으로 동의서를 한 번에 제출한다. 하나라도 문제가 있으면 아무것도 저장하지 않는다.
+	 * 서명 확인과 PDF 렌더링은 DB 연결을 잡기 전에 한다. 연결 풀이 5개뿐이라, 서버에서 0.1초 넘게 걸리는 이 일을
+	 * transaction 안에서 하면 여러 학생이 동시에 제출할 때 로그인과 다른 화면이 연결을 기다린다.
+	 * 수강 확인, 잠금, 저장만 짧은 transaction에서 한다.
 	 *
 	 * @param signerName 세종대 포털 인증으로 확인한 이름
 	 * @param shownLanguage 학생이 읽은 동의서 언어. 저장하는 PDF는 언어와 관계없이 항상 한글본이다.
 	 * @return 제출한 수업 수
 	 */
-	@Transactional
 	public int submit(String studentId, String signerName, List<Long> enrollmentIds, ConsentLanguage shownLanguage,
 			boolean agreed, String signatureDataUrl) {
 		List<Long> ids = enrollmentIds == null ? List.of() : enrollmentIds.stream().distinct().toList();
@@ -79,12 +84,10 @@ public class ConsentService {
 		if (ids.size() > MAX_COURSES_PER_SUBMIT) {
 			throw new ConsentException("consent.error.noCourse");
 		}
-		List<Enrollment> selected = enrollments.lockOpenByIds(ids, studentId, today());
-		if (selected.size() != ids.size()) {
+		// 서명을 읽고 PDF를 그리는 일은 무겁다. 남의 수강을 보낸 요청이 그 일을 시키지 못하게 먼저 가볍게 확인한다
+		// (잠그고 다시 확인하는 것은 save에서 한다)
+		if (enrollments.countOpenByIds(ids, studentId, today()) != ids.size()) {
 			throw new NotFoundException();
-		}
-		if (!consents.findByEnrollmentIn(selected).isEmpty()) {
-			throw new ConsentException("consent.error.already");
 		}
 		if (!agreed) {
 			throw new ConsentException("consent.error.notAgreed");
@@ -95,24 +98,49 @@ public class ConsentService {
 		// 동의서 양식에는 수업 정보가 없으므로 선택한 수업 모두 같은 PDF를 갖는다
 		byte[] pdf = renderer.render(ConsentLanguage.KO, signerName, signedAt.atZoneSameInstant(SEOUL), signature);
 		try {
-			for (Enrollment enrollment : selected) {
-				Consent consent = consents.saveAndFlush(new Consent(enrollment, shownLanguage, signerName, signedAt));
-				documents.save(new ConsentDocument(consent, signature, pdf));
-			}
+			Integer saved = transactions.execute(
+					status -> save(studentId, ids, shownLanguage, signerName, signedAt, signature, pdf));
+			return saved == null ? 0 : saved;
 		}
 		catch (DataIntegrityViolationException ex) {
 			// 같은 수업을 동시에 두 번 제출한 경우
 			throw new ConsentException("consent.error.already");
 		}
+	}
+
+	/** submit의 transaction 부분: 수강 행을 잠그고, 아직 동의서가 없는지 본 뒤 저장한다. */
+	private int save(String studentId, List<Long> ids, ConsentLanguage shownLanguage, String signerName,
+			OffsetDateTime signedAt, byte[] signature, byte[] pdf) {
+		List<Enrollment> selected = enrollments.lockOpenByIds(ids, studentId, today());
+		if (selected.size() != ids.size()) {
+			throw new NotFoundException();
+		}
+		if (!consents.findByEnrollmentIn(selected).isEmpty()) {
+			throw new ConsentException("consent.error.already");
+		}
+		for (Enrollment enrollment : selected) {
+			Consent consent = consents.saveAndFlush(new Consent(enrollment, shownLanguage, signerName, signedAt));
+			documents.save(new ConsentDocument(consent, signature, pdf));
+		}
 		return selected.size();
 	}
 
-	@Transactional(readOnly = true)
-	public PdfFile pdf(String studentId, long enrollmentId) {
+	/**
+	 * 학생이 보는 동의서 PDF. 한국어는 저장한 한글본(공식 기록) 그대로, 영어는 같은 서명·이름·일시로 영문본을 새로 그린다.
+	 * 영문본은 저장하지 않으므로 관리자 다운로드는 언제나 한글본이다.
+	 * 영문본을 그리는 동안 DB 연결을 잡지 않도록 transaction 없이 읽는다(수강은 과목, 학기까지 한 번에 읽어 온다).
+	 */
+	public PdfFile pdf(String studentId, long enrollmentId, ConsentLanguage language) {
 		Enrollment enrollment = openEnrollment(studentId, enrollmentId);
 		Consent consent = consents.findByEnrollment(enrollment).orElseThrow(NotFoundException::new);
-		byte[] pdf = documents.findById(consent.getId()).orElseThrow(NotFoundException::new).getPdf();
-		return new PdfFile("CCTV동의서_" + enrollment.getCourse().getName() + ".pdf", pdf);
+		ConsentDocument document = documents.findById(consent.getId()).orElseThrow(NotFoundException::new);
+		String courseName = enrollment.getCourse().getName();
+		if (language == ConsentLanguage.EN) {
+			byte[] pdf = renderer.render(ConsentLanguage.EN, consent.getSignerName(),
+					consent.getSignedAt().atZoneSameInstant(SEOUL), document.getSignaturePng());
+			return new PdfFile("CCTV_Consent_" + courseName + ".pdf", pdf);
+		}
+		return new PdfFile("CCTV동의서_" + courseName + ".pdf", document.getPdf());
 	}
 
 	private Enrollment openEnrollment(String studentId, long enrollmentId) {

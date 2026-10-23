@@ -3,10 +3,16 @@ package kr.ac.sejong.cedpt.cctvconsent.consent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.CRC32;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
@@ -24,6 +30,52 @@ class SignatureImageTest {
 	@Test
 	void rejectsBlankSignature() {
 		assertThatThrownBy(() -> SignatureImage.fromDataUrl(SignatureFixtures.dataUrl(SignatureFixtures.blankPng())))
+				.isInstanceOf(ConsentException.class);
+	}
+
+	@Test
+	void rejectsHugeCanvasEvenWhenSidesAreWithinLimit() {
+		// 한 변은 2500 이하지만 넓이가 120만 픽셀을 넘는다. 서명 패드는 가장 넓은 화면에서도 약 83만 픽셀이다
+		assertThatThrownBy(() -> SignatureImage.fromDataUrl(SignatureFixtures.dataUrl(SignatureFixtures.png(2400, 1200))))
+				.isInstanceOf(ConsentException.class);
+		assertThat(SignatureImage.fromDataUrl(SignatureFixtures.dataUrl(SignatureFixtures.png(1200, 700)))).isNotEmpty();
+	}
+
+	@Test
+	void rejectsSixteenBitPng() throws IOException {
+		// 브라우저 캔버스는 8비트만 만든다. 16비트는 같은 크기에 메모리를 두 배 쓴다
+		BufferedImage image = new BufferedImage(600, 240, BufferedImage.TYPE_USHORT_GRAY);
+		Graphics2D g = image.createGraphics();
+		g.setColor(Color.WHITE);
+		g.fillRect(0, 0, 600, 240);
+		g.setColor(Color.BLACK);
+		g.fillRect(50, 100, 500, 20);
+		g.dispose();
+		ByteArrayOutputStream png = new ByteArrayOutputStream();
+		ImageIO.write(image, "png", png);
+
+		assertThatThrownBy(() -> SignatureImage.fromDataUrl(SignatureFixtures.dataUrl(png.toByteArray())))
+				.isInstanceOf(ConsentException.class);
+	}
+
+	@Test
+	void rejectsSingleDotFromThickPen() {
+		// 5px 펜으로 화면 배율 3배(조작하면 가능)로 한 번 찍고 살짝 움직인 모양: 지름 16px 점과 짧은 획
+		BufferedImage image = new BufferedImage(1050, 420, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = image.createGraphics();
+		g.setColor(new Color(17, 17, 17));
+		g.fillOval(500, 200, 16, 16);
+		g.fillRect(508, 205, 3, 6);
+		g.dispose();
+		ByteArrayOutputStream png = new ByteArrayOutputStream();
+		try {
+			ImageIO.write(image, "png", png);
+		}
+		catch (IOException ex) {
+			throw new UncheckedIOException(ex);
+		}
+
+		assertThatThrownBy(() -> SignatureImage.fromDataUrl(SignatureFixtures.dataUrl(png.toByteArray())))
 				.isInstanceOf(ConsentException.class);
 	}
 

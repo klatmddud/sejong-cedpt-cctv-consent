@@ -7,6 +7,7 @@ import java.util.Base64;
 import java.util.Iterator;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
+import javax.imageio.ImageTypeSpecifier;
 import javax.imageio.stream.ImageInputStream;
 
 /**
@@ -16,15 +17,20 @@ final class SignatureImage {
 
 	private static final String PREFIX = "data:image/png;base64,";
 	private static final int MAX_BYTES = 500_000;
-	private static final int MAX_SIDE = 3000;
-	// 이 수 이상의 픽셀에 잉크가 있어야 서명으로 본다 (점 하나 찍기 방지)
-	private static final int MIN_INK_PIXELS = 150;
+	// 서명 패드는 높이 200px, 화면 배율 2배까지만 그려(signature-pad.js) 가장 넓은 화면에서도 약 2080×400(83만 픽셀)이다.
+	// 빈 PNG는 몇십 KB로도 큰 크기를 적을 수 있고 디코딩은 크기만큼 메모리와 CPU를 쓰므로, 실제보다 조금 넉넉한 선에서 자른다
+	private static final int MAX_SIDE = 2500;
+	private static final long MAX_PIXELS = 1_200_000;
+	// 이 수 이상의 픽셀에 잉크가 있어야 서명으로 본다 (점 하나 찍기 방지).
+	// 서명 패드 펜 굵기(signature-pad.js의 lineWidth 5)로 화면 배율 2배에서 찍힌 점 하나는 약 80픽셀이고,
+	// 배율을 3배로 조작해 그려도(약 180픽셀) 넘지 못하게 잡는다
+	private static final int MIN_INK_PIXELS = 300;
 
 	private SignatureImage() {
 	}
 
 	/**
-	 * 헤더의 가로세로를 먼저 보고 MAX_SIDE 안일 때만 픽셀을 읽는다. 작은 파일에 큰 크기를 적은 PNG를 그대로 읽으면
+	 * 헤더의 가로세로를 먼저 보고 MAX_SIDE, MAX_PIXELS 안일 때만 픽셀을 읽는다. 작은 파일에 큰 크기를 적은 PNG를 그대로 읽으면
 	 * 디코더가 그 크기만큼 메모리를 먼저 잡아 서버가 멈출 수 있다.
 	 *
 	 * @return PNG가 아니거나 크기가 넘으면 null
@@ -38,7 +44,14 @@ final class SignatureImage {
 			ImageReader reader = readers.next();
 			try {
 				reader.setInput(in, true, true);
-				if (reader.getWidth(0) > MAX_SIDE || reader.getHeight(0) > MAX_SIDE) {
+				int width = reader.getWidth(0);
+				int height = reader.getHeight(0);
+				if (width > MAX_SIDE || height > MAX_SIDE || (long) width * height > MAX_PIXELS) {
+					return null;
+				}
+				// 브라우저 캔버스는 8비트 PNG만 만든다. 16비트는 같은 크기에 메모리를 두 배 쓰므로 받지 않는다
+				ImageTypeSpecifier type = reader.getRawImageType(0);
+				if (type == null || type.getSampleModel().getSampleSize(0) > 8) {
 					return null;
 				}
 				return reader.read(0);
