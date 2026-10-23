@@ -1759,6 +1759,16 @@ html {
 	font-size: 22px;
 }
 
+/* 오류 화면(error.html): 완료 화면과 같은 틀에 경고 색 */
+.error-card .complete-icon {
+	background: var(--warn-bg);
+	color: var(--warn-text);
+}
+
+.error-card .button {
+	align-self: stretch;
+}
+
 @keyframes rise {
 	from {
 		opacity: 0;

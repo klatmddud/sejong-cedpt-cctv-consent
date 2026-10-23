@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.servlet.RequestDispatcher;
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.PostgresTestSupport;
 import kr.ac.sejong.cedpt.cctvconsent.roster.EnrollmentSync;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
@@ -146,6 +148,25 @@ class AdminControllerTest extends PostgresTestSupport {
 	void refusesAdminUsernameWithoutLetters() {
 		assertThatThrownBy(() -> new SecurityConfig().adminAccount("12345678", "$2y$04$abc"))
 				.isInstanceOf(IllegalStateException.class);
+	}
+
+	@Test
+	void showsErrorPageForEachStatus() throws Exception {
+		// MockMvc는 sendError를 /error로 넘기지 않으므로, 서블릿 컨테이너가 넘길 때처럼 상태 코드를 넣어 /error를 연다
+		mvc.perform(get("/error").accept(MediaType.TEXT_HTML)
+						.requestAttr(RequestDispatcher.ERROR_STATUS_CODE, 404))
+				.andExpect(content().string(Matchers.containsString("페이지를 찾을 수 없습니다")))
+				.andExpect(content().string(Matchers.containsString("오류 코드 404")));
+		mvc.perform(get("/error").accept(MediaType.TEXT_HTML)
+						.requestAttr(RequestDispatcher.ERROR_STATUS_CODE, 403))
+				.andExpect(content().string(Matchers.containsString("다시 로그인")));
+		// 따로 문구가 없는 코드는 4xx, 5xx 문구로
+		mvc.perform(get("/error").accept(MediaType.TEXT_HTML)
+						.requestAttr(RequestDispatcher.ERROR_STATUS_CODE, 502))
+				.andExpect(content().string(Matchers.containsString("일시적인 오류가 발생했습니다")));
+		mvc.perform(get("/error").accept(MediaType.TEXT_HTML).param("lang", "en")
+						.requestAttr(RequestDispatcher.ERROR_STATUS_CODE, 404))
+				.andExpect(content().string(Matchers.containsString("Page not found")));
 	}
 
 	@Test
