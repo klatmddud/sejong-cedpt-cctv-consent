@@ -42,6 +42,23 @@ public class LoginAttemptLimiter {
 		}
 	}
 
+	/**
+	 * 막혀 있지 않으면 실패 하나를 미리 기록하고 true를 돌려준다. 확인과 기록을 한 번에 해서, 동시에 들어온 요청들이 모두
+	 * isBlocked를 통과한 뒤 기록하는 바람에 한도를 넘는 일이 없게 한다. 시도가 성공하면 reset, 실패가 아니었으면
+	 * cancelLast로 되돌린다.
+	 */
+	public boolean tryReserve(String key, Policy policy) {
+		Deque<Instant> recent = failures.computeIfAbsent(key, k -> new ArrayDeque<>());
+		synchronized (recent) {
+			prune(recent, policy);
+			if (recent.size() >= policy.maxFailures()) {
+				return false;
+			}
+			recent.addLast(clock.instant());
+			return true;
+		}
+	}
+
 	public void recordFailure(String key, Policy policy) {
 		Deque<Instant> recent = failures.computeIfAbsent(key, k -> new ArrayDeque<>());
 		synchronized (recent) {

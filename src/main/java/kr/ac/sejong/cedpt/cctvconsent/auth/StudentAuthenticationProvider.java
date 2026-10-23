@@ -1,11 +1,13 @@
 package kr.ac.sejong.cedpt.cctvconsent.auth;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import kr.ac.sejong.cedpt.cctvconsent.roster.EnrollmentSync;
 import org.slf4j.Logger;
@@ -27,7 +29,10 @@ import org.springframework.stereotype.Component;
  * 세종대 포털은 5회 실패하면 비밀번호를 초기화해야 하므로, 우리 서버를 통한 실패는 학번당 24시간에 3회로 막는다
  * (짧은 기간이면 기간이 지날 때마다 다시 시도할 수 있어 포털 실패가 5회를 넘는다).
  * 같은 IP에서 여러 학번을 시도하는 것도 30분에 10회로 막는다.
- * 실패는 포털에 묻기 전에 미리 센다. 같은 학번을 동시에 여러 번 보내 제한을 건너뛰지 못하게 하고, 같은 학번 시도는
+ * 남의 학번으로 일부러 틀려 잠그는 공격은 학번별 제한만으로는 막을 수 없다(잠그는 것이 목적이므로). 서버 전체 실패가
+ * 10분에 SPIKE개를 넘으면 공격으로 보고, 그동안은 IP당 한도를 PER_IP_UNDER_ATTACK으로 줄여 IP 하나로 잠글 수 있는
+ * 학번 수를 줄이고 감사 로그에 남긴다. 완전히 막으려면 CAPTCHA가 필요하다.
+ * 실패는 포털에 묻기 전에 확인과 함께 미리 센다(tryReserve). 동시에 보낸 요청이 모두 한도 확인을 통과하지 못하게 하고, 같은 학번 시도는
  * 한 번에 하나만, 포털 호출은 서버 전체에서 동시에 MAX_PORTAL_CALLS개까지만 보낸다(포털 응답을 기다리는 스레드가
  * 쌓이지 않게). 비밀번호가 틀린 것이 아니면(포털 장애 등) 미리 센 실패를 되돌린다.
  * 예외 메시지는 messages.properties의 코드이며 로그인 화면이 학생이 고른 언어로 바꿔 보여 준다.
@@ -38,16 +43,23 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 
 	static final LoginAttemptLimiter.Policy PER_STUDENT = new LoginAttemptLimiter.Policy(3, Duration.ofHours(24));
 	static final LoginAttemptLimiter.Policy PER_IP = new LoginAttemptLimiter.Policy(10, Duration.ofMinutes(30));
+	static final LoginAttemptLimiter.Policy SPIKE = new LoginAttemptLimiter.Policy(30, Duration.ofMinutes(10));
+	static final LoginAttemptLimiter.Policy PER_IP_UNDER_ATTACK = new LoginAttemptLimiter.Policy(2, PER_IP.window());
+	private static final String ALL_STUDENTS = "student-all";
 	static final int MAX_PORTAL_CALLS = 8;
+	// 한 반이 함께 로그인하면 잠깐 몰린다. 바로 "잠시 후 다시"를 보이지 않고 앞사람 포털 응답(보통 1~2초)을 기다린다
+	static final Duration PORTAL_WAIT = Duration.ofSeconds(3);
 	private static final Pattern STUDENT_ID = Pattern.compile("\\d{8,10}");
 
 	private static final Logger log = LoggerFactory.getLogger(StudentAuthenticationProvider.class);
+	private static final Logger audit = LoggerFactory.getLogger("audit");
 
 	private final StudentAuthenticator authenticator;
 	private final LoginAttemptLimiter limiter;
 	private final EnrollmentSync enrollmentSync;
 	private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
 	private final Semaphore portalCalls = new Semaphore(MAX_PORTAL_CALLS);
+	private final AtomicReference<Instant> lastSpikeAlert = new AtomicReference<>(Instant.EPOCH);
 
 	public StudentAuthenticationProvider(StudentAuthenticator authenticator, LoginAttemptLimiter limiter,
 			EnrollmentSync enrollmentSync) {
@@ -66,16 +78,23 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 
 		String studentKey = "student:" + studentId;
 		String ipKey = "student-ip:" + remoteAddress(authentication);
-		if (limiter.isBlocked(studentKey, PER_STUDENT) || limiter.isBlocked(ipKey, PER_IP)) {
-			throw new LockedException("login.error.locked");
-		}
-
 		if (!inFlight.add(studentKey)) {
 			throw new LockedException("login.error.busy");
 		}
 		StudentLogin login;
 		try {
-			if (!portalCalls.tryAcquire()) {
+			// 포털에 묻기 전에 실패로 센다. 성공하거나 비밀번호 문제가 아니면 되돌린다
+			if (!limiter.tryReserve(studentKey, PER_STUDENT)) {
+				throw new LockedException("login.error.locked");
+			}
+			LoginAttemptLimiter.Policy ipPolicy = limiter.isBlocked(ALL_STUDENTS, SPIKE) ? PER_IP_UNDER_ATTACK : PER_IP;
+			if (!limiter.tryReserve(ipKey, ipPolicy)) {
+				limiter.cancelLast(studentKey);
+				throw new LockedException("login.error.locked");
+			}
+			if (!acquirePortalCall()) {
+				limiter.cancelLast(studentKey);
+				limiter.cancelLast(ipKey);
 				throw new AuthenticationServiceException("login.error.busy");
 			}
 			try {
@@ -95,10 +114,18 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 				List.of(new SimpleGrantedAuthority("ROLE_STUDENT")));
 	}
 
+	private boolean acquirePortalCall() {
+		try {
+			return portalCalls.tryAcquire(PORTAL_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			return false;
+		}
+	}
+
+	/** studentKey, ipKey에 실패가 하나씩 미리 기록된 상태로 부른다. */
 	private StudentLogin askPortal(String studentId, String password, String studentKey, String ipKey) {
-		// 포털에 묻기 전에 실패로 센다. 성공하거나 비밀번호 문제가 아니면 되돌린다
-		limiter.recordFailure(studentKey, PER_STUDENT);
-		limiter.recordFailure(ipKey, PER_IP);
 		try {
 			StudentLogin login = authenticator.authenticate(studentId, password);
 			limiter.reset(studentKey);
@@ -107,6 +134,7 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 		}
 		catch (SejongAuthException ex) {
 			if (ex.getReason() == SejongAuthException.Reason.INVALID_CREDENTIALS) {
+				recordStudentFailure();
 				throw new BadCredentialsException("login.error.invalid");
 			}
 			limiter.cancelLast(studentKey);
@@ -120,6 +148,19 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 			limiter.cancelLast(studentKey);
 			limiter.cancelLast(ipKey);
 			throw ex;
+		}
+	}
+
+	/** 서버 전체의 비밀번호 실패를 센다. 공격으로 보이기 시작하면 10분에 한 번만 감사 로그에 남긴다. */
+	private void recordStudentFailure() {
+		limiter.recordFailure(ALL_STUDENTS, SPIKE);
+		if (limiter.isBlocked(ALL_STUDENTS, SPIKE)) {
+			Instant now = Instant.now();
+			Instant last = lastSpikeAlert.get();
+			if (last.isBefore(now.minus(SPIKE.window())) && lastSpikeAlert.compareAndSet(last, now)) {
+				audit.warn("학생 로그인 실패 급증: {}분에 {}회 이상. IP당 한도를 {}회로 줄인다", SPIKE.window().toMinutes(),
+						SPIKE.maxFailures(), PER_IP_UNDER_ATTACK.maxFailures());
+			}
 		}
 	}
 

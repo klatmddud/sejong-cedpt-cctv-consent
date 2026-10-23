@@ -6,6 +6,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 
 class LoginAttemptLimiterTest {
@@ -24,6 +30,31 @@ class LoginAttemptLimiterTest {
 		limiter.recordFailure("k", POLICY);
 		assertThat(limiter.isBlocked("k", POLICY)).isTrue();
 		assertThat(limiter.isBlocked("other", POLICY)).isFalse();
+	}
+
+	@Test
+	void tryReserveLetsOnlyMaxFailuresThroughEvenWhenConcurrent() throws Exception {
+		int threads = 20;
+		ExecutorService pool = Executors.newFixedThreadPool(threads);
+		CountDownLatch start = new CountDownLatch(1);
+		List<Future<Boolean>> results = new ArrayList<>();
+		for (int i = 0; i < threads; i++) {
+			results.add(pool.submit(() -> {
+				start.await();
+				return limiter.tryReserve("k", POLICY);
+			}));
+		}
+		start.countDown();
+		int reserved = 0;
+		for (Future<Boolean> result : results) {
+			reserved += result.get() ? 1 : 0;
+		}
+		pool.shutdown();
+
+		assertThat(reserved).isEqualTo(POLICY.maxFailures());
+		assertThat(limiter.isBlocked("k", POLICY)).isTrue();
+		limiter.cancelLast("k");
+		assertThat(limiter.tryReserve("k", POLICY)).isTrue();
 	}
 
 	@Test

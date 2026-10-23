@@ -3,5 +3,20 @@
 
 sejong-cedpt-cctv.duckdns.org {
 	encode zstd gzip
-	reverse_proxy cctv-consent:8080
+
+	# Request bodies are read before the app checks the login (the CSRF check parses form fields),
+	# so cap them here. Only the admin roster upload needs a large body (xlsx files, app limit 20MB).
+	# The student consent form with its signature stays well under 1MB.
+	handle /admin/roster* {
+		request_body {
+			max_size 20MB
+		}
+		reverse_proxy cctv-consent:8080
+	}
+	handle {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy cctv-consent:8080
+	}
 }
