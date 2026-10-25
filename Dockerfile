@@ -22,7 +22,9 @@ COPY --from=build /workspace/build/libs/*.jar app.jar
 # Server has ~1GB RAM: cap heap relative to the container memory limit.
 # 40% of 640m (256MB) leaves room for metaspace (~100MB) and threads; at 60% the container hit its limit and swapped.
 # The server sustains only ~1/8 OCPU, so C1 only: C2 compiles took CPU from requests for minutes after each deploy.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=40 -XX:+UseSerialGC -XX:TieredStopAtLevel=1"
+# ExitOnOutOfMemoryError: 힙이 바닥나면 JVM을 바로 종료한다. 그래야 `--restart`가 컨테이너를 다시 띄운다.
+# 없으면 OOM 뒤 Full GC만 반복하며 멈춘 상태로 남을 수 있다.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=40 -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError"
 
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

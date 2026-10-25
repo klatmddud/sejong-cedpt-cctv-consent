@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,9 @@ public class RosterImportService {
 	private final EnrollmentRepository enrollments;
 	private final RosterUploadRepository uploads;
 	private final TargetRooms targetRooms;
+	// 명부 파싱(xlsx 압축 해제)은 힙을 많이 쓸 수 있어 서버 전체에서 한 번에 하나만 처리한다. 동시 업로드가
+	// 겹쳐 힙을 함께 채우는 것을 막는다(관리자 권한이 필요하지만 심층 방어).
+	private final Semaphore parsing = new Semaphore(1);
 
 	public RosterImportService(SemesterRepository semesters, CourseRepository courses,
 			EnrollmentRepository enrollments, RosterUploadRepository uploads, TargetRooms targetRooms) {
@@ -110,7 +114,15 @@ public class RosterImportService {
 	 * @throws RosterParseException 형식이 맞지 않는 파일이 있거나 학기가 서로 다름
 	 */
 	public ParsedRoster read(List<UploadedFile> files) {
-		return new ParsedRoster(files.stream().map(UploadedFile::name).collect(Collectors.joining(", ")), merge(files));
+		if (!parsing.tryAcquire()) {
+			throw new RosterParseException("다른 수강명부를 처리하고 있습니다. 잠시 후 다시 올려 주세요.");
+		}
+		try {
+			return new ParsedRoster(files.stream().map(UploadedFile::name).collect(Collectors.joining(", ")), merge(files));
+		}
+		finally {
+			parsing.release();
+		}
 	}
 
 	/**

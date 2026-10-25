@@ -70,6 +70,9 @@ class SecurityConfig {
 				password -> encoder.matches(password, adminHash));
 		http.headers(SecurityConfig::securityHeaders)
 				.authenticationManager(new ProviderManager(byUsername(students, admins)))
+				// 저장된 요청(saved request)을 쓰지 않는다. RoleTargetSuccessHandler가 역할별 고정 주소로만 보내므로
+				// 이 캐시는 안 쓰이는데, 켜 두면 익명 GET마다 요청 헤더까지 세션에 복사해 세션·힙을 늘리는 DoS 통로가 된다.
+				.requestCache(cache -> cache.disable())
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/", "/login", "/css/**", "/js/**", "/img/**", "/actuator/health", "/error").permitAll()
 						.requestMatchers("/admin/**").hasRole("ADMIN")

@@ -35,8 +35,10 @@ import org.springframework.stereotype.Component;
  * 학번별 실패는 포털에 묻기 전에 확인과 함께 미리 센다(tryReserve). 동시에 보낸 요청이 모두 한도 확인을 통과하지 못하게 하고, 같은 학번 시도는
  * 한 번에 하나만, 포털 호출은 서버 전체에서 동시에 MAX_PORTAL_CALLS개까지만 보낸다(포털 응답을 기다리는 스레드가
  * 쌓이지 않게). 비밀번호가 틀린 것이 아니면(포털 장애 등) 미리 센 실패를 되돌린다.
- * IP별 실패는 비밀번호가 틀린 것으로 확인된 뒤에 센다. 미리 세면 한 강의실 와이파이(같은 IP)에서 함께 로그인할 때 진행 중인
- * 로그인만으로 한도가 차서 맞는 비밀번호도 잠긴다. 대신 동시에 몰리면 IP 한도를 포털 동시 호출 수만큼 넘을 수 있다.
+ * IP별 실패는 미리 세지 않고 포털이 응답한 뒤에 센다(미리 세면 한 강의실 와이파이에서 함께 로그인할 때 진행 중인
+ * 로그인만으로 한도가 찬다). 비밀번호 오류뿐 아니라 계정 제한·포털 장애 응답도 IP 한도에 센다. 포털까지 가는 시도를
+ * IP당으로 묶어, 학번만 바꿔 비밀번호 외 실패를 쏟아부어 스레드·포털 슬롯을 고갈시키는 공격을 막기 위해서다.
+ * 그 대가로 포털 장애가 길어지면 같은 IP가 30분에 10회로 잠시 막힐 수 있고, 동시에 몰리면 IP 한도를 포털 동시 호출 수만큼 넘을 수 있다.
  * 예외 메시지는 messages.properties의 코드이며 로그인 화면이 학생이 고른 언어로 바꿔 보여 준다.
  * 로그인에 성공하면 sjpt에서 받은 수강 과목을 반영한다. 반영에 실패해도 로그인은 성공시키고 이전 수강 정보로 보여 준다.
  */
@@ -125,7 +127,7 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 		}
 	}
 
-	/** studentKey에 실패가 하나 미리 기록된 상태로 부른다. ipKey에는 비밀번호가 틀렸을 때만 기록한다. */
+	/** studentKey에 실패가 하나 미리 기록된 상태로 부른다. ipKey에는 포털이 실패로 응답했을 때(이유 무관) 기록한다. */
 	private StudentLogin askPortal(String studentId, String password, String studentKey, String ipKey) {
 		try {
 			StudentLogin login = authenticator.authenticate(studentId, password);
@@ -133,11 +135,16 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 			return login;
 		}
 		catch (SejongAuthException ex) {
+			// 포털까지 간 실패는 이유와 무관하게 IP 한도와 SPIKE에 센다. 예전엔 비밀번호 오류만 셌는데,
+			// 포털이 '계정 제한/장애'로 응답하는 시도를 학번만 바꿔 쏟아부으면 스레드와 포털 슬롯을 계속
+			// 붙잡으면서도 어떤 IP 한도에도 걸리지 않았다(스레드 고갈 DoS). 절충: 포털 장애가 길어지면
+			// 같은 IP(강의실 와이파이)가 30분에 10회로 잠시 막힐 수 있다.
+			limiter.recordFailure(ipKey, PER_IP);
+			recordStudentFailure();
 			if (ex.getReason() == SejongAuthException.Reason.INVALID_CREDENTIALS) {
-				limiter.recordFailure(ipKey, PER_IP);
-				recordStudentFailure();
 				throw new BadCredentialsException("login.error.invalid");
 			}
+			// 비밀번호 오류가 아니면 학번당 한도는 되돌린다(포털 장애로 한 학생이 24시간 잠기지 않게).
 			limiter.cancelLast(studentKey);
 			if (ex.getReason() == SejongAuthException.Reason.ACCOUNT_RESTRICTED) {
 				throw new LockedException("login.error.restricted");

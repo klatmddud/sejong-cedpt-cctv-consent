@@ -9,11 +9,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.text.Normalizer;
+import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import javax.imageio.ImageIO;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -28,7 +31,9 @@ import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
  * 원본 동의서 PDF(consent_ko.pdf, consent_en.pdf)에 동의 체크, 서명 일자, 성명, 서명 이미지를 덧입힌다.
@@ -53,9 +58,16 @@ public class ConsentPdfRenderer {
 	// 들어, 인쇄에 충분한 300dpi 크기로 줄여서 넣는다
 	private static final float SIGNATURE_DPI = 300;
 
+	// PDF 렌더링은 이 서버(약 1/8 OCPU, 힙 256MB)에서 CPU·힙을 많이 쓴다. 서명을 크게 만들어 동시에 여러 번
+	// 요청하면 스레드와 힙을 고갈시킬 수 있어, 서버 전체에서 동시에 도는 렌더 수를 제한한다. 빈자리를 잠깐 기다리고
+	// 그래도 없으면 503으로 거절한다(OutOfMemoryError로 전체가 멈추는 것보다 낫다).
+	private static final int MAX_CONCURRENT_RENDERS = 2;
+	private static final Duration RENDER_WAIT = Duration.ofSeconds(3);
+
 	private final Map<ConsentLanguage, byte[]> templates = new EnumMap<>(ConsentLanguage.class);
 	private final byte[] font;
 	private final byte[] fallbackFont;
+	private final Semaphore renderSlots = new Semaphore(MAX_CONCURRENT_RENDERS);
 
 	public ConsentPdfRenderer() {
 		for (ConsentLanguage language : ConsentLanguage.values()) {
@@ -144,6 +156,7 @@ public class ConsentPdfRenderer {
 	}
 
 	public byte[] render(ConsentLanguage language, String signerName, ZonedDateTime signedAt, byte[] signaturePng) {
+		acquireRenderSlot();
 		try (PDDocument document = Loader.loadPDF(templates.get(language))) {
 			PDPage page = document.getPage(0);
 			Fonts font = new Fonts(document, this.font, fallbackFont);
@@ -163,6 +176,27 @@ public class ConsentPdfRenderer {
 		catch (IOException ex) {
 			throw new UncheckedIOException("동의서 PDF를 만들 수 없습니다.", ex);
 		}
+		finally {
+			renderSlots.release();
+		}
+	}
+
+	/** 동시 렌더 슬롯을 얻는다. RENDER_WAIT 안에 못 얻으면 {@link RenderBusyException}(503)을 던진다. */
+	private void acquireRenderSlot() {
+		try {
+			if (!renderSlots.tryAcquire(RENDER_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
+				throw new RenderBusyException();
+			}
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new RenderBusyException();
+		}
+	}
+
+	/** 동시 렌더가 한도에 차서 지금은 PDF를 만들 수 없을 때. */
+	@ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+	public static class RenderBusyException extends RuntimeException {
 	}
 
 	/**

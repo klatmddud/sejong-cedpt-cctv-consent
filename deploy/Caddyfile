@@ -1,22 +1,41 @@
 # HTTPS reverse proxy for the app (Let's Encrypt certificate is issued and renewed automatically).
 # Server setup and commands: deploy/README.md
 
+# 느린 요청(slow-POST/slowloris) 방어: 헤더와 본문 읽기에 시간 제한을 둔다. 제한을 넘기면 Caddy가
+# 연결을 끊어, 소수의 느린 연결이 앱(Tomcat) 스레드를 계속 붙잡지 못하게 한다. read_body는 20MB 명부
+# 업로드가 느린 회선에서도 끝날 만큼 넉넉히 둔다.
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 60s
+			idle 2m
+		}
+	}
+}
+
 sejong-cedpt-cctv.duckdns.org {
 	encode zstd gzip
 
 	# Request bodies are read before the app checks the login (the CSRF check parses form fields),
 	# so cap them here. Only the admin roster upload needs a large body (xlsx files, app limit 20MB).
 	# The student consent form with its signature stays well under 1MB.
+	# request_buffers로 Caddy가 본문을 끝까지 버퍼링한 뒤에야 앱으로 전달한다. 느리게 보내는 동안에는
+	# (값싼) Caddy 연결만 붙잡고 앱 스레드는 쓰지 않으므로, slow-POST가 Tomcat 스레드를 고갈시키지 못한다.
 	handle /admin/roster* {
 		request_body {
 			max_size 20MB
 		}
-		reverse_proxy cctv-consent:8080
+		reverse_proxy cctv-consent:8080 {
+			request_buffers 20MB
+		}
 	}
 	handle {
 		request_body {
 			max_size 1MB
 		}
-		reverse_proxy cctv-consent:8080
+		reverse_proxy cctv-consent:8080 {
+			request_buffers 1MB
+		}
 	}
 }
