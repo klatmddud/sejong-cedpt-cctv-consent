@@ -87,8 +87,11 @@ docker logs cctv-consent 2>&1 | grep audit        # 관리자 작업 감사 로�
   이 로그가 보이면 공격을 의심한다. 잠긴 학생은 앱을 재시작하면 풀린다. 완전히 막으려면 CAPTCHA가 필요하다.
 - **관리자 로그인**: 영문 아이디 실패는 IP당 15분에 5회로, 동시에 보내도 넘지 않는다. 로그인에 성공해도 그 IP의 다른 실패는
   지우지 않는다(같은 공유기를 쓰는 사람이 관리자 로그인 때마다 다시 시도하지 못하게). BCrypt 확인은 서버 전체에서 동시에 2개까지만 한다.
-- **요청 크기**: 로그인 확인 전에도 본문을 읽으므로 Caddyfile에서 1MB로 막고, 명부 업로드(`/admin/roster`)만 20MB까지 받는다.
+- **요청 크기·느린 요청**: 로그인 확인 전에도 본문을 읽으므로 Caddyfile에서 1MB로 막고, 명부 업로드(`/admin/roster`)만 20MB까지 받는다.
+  Caddyfile 전역 `timeouts`와 `request_buffers`로 느린 요청(slow-POST)이 앱 스레드를 고갈시키지 못하게 막는다.
   Caddyfile은 자동 배포되지 않는다. 고치면 `scp deploy/Caddyfile oracle:~/caddy/Caddyfile` 후 위의 reload 명령을 실행한다.
-- **배포 액션**: `deploy.yml`의 `appleboy/ssh-action`은 서버 SSH 키를 받으므로 커밋 SHA로 고정했다. 버전을 올릴 때는
-  [릴리스](https://github.com/appleboy/ssh-action/releases)를 확인하고 SHA를 바꾼다.
+- **배포 액션**: `deploy.yml`의 모든 서드파티 액션은 가변 태그가 아니라 커밋 SHA로 고정했다(공급망 공격 방지). 버전을 올릴 때는
+  각 릴리스를 확인하고 SHA를 바꾼다(주석에 태그 표시).
+- **배포 SSH 호스트 키 검증**: 서버에서 `ssh-keyscan -t ed25519 <SERVER_HOST>`로 나온 키의 base64 SHA256 지문을
+  GitHub 저장소 시크릿 `SERVER_SSH_FINGERPRINT`에 넣는다. 그래야 배포 때 중간자(MITM) 공격을 막는다. 비워 두면 검증을 건너뛴다.
 - **로컬 전용 설정**: `application-local.properties`와 `local` 패키지(테스트 계정)는 배포 jar에 들어가지 않는다(`build.gradle`의 `bootJar`).

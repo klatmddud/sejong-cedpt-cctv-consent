@@ -1,7 +1,10 @@
 package kr.ac.sejong.cedpt.cctvconsent.admin;
 
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -29,11 +32,14 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.WebAuthenticationDetails;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * 관리자와 학생이 같은 로그인 화면(/login)을 쓴다. 아이디가 설정된 관리자 아이디와 같으면 관리자 계정(공용 계정 하나,
@@ -70,6 +76,9 @@ class SecurityConfig {
 				password -> encoder.matches(password, adminHash));
 		http.headers(SecurityConfig::securityHeaders)
 				.authenticationManager(new ProviderManager(byUsername(students, admins)))
+				// CsrfFilter가 getParameter()로 본문을 파싱하기 전에, 관리자가 아닌 multipart 업로드는 거절한다.
+				// 안 그러면 로그인하지 않은 사람도 /admin/roster에 20MB를 보내 본문 파싱을 유발할 수 있다.
+				.addFilterBefore(new RejectUnauthenticatedAdminUpload(), CsrfFilter.class)
 				// 저장된 요청(saved request)을 쓰지 않는다. RoleTargetSuccessHandler가 역할별 고정 주소로만 보내므로
 				// 이 캐시는 안 쓰이는데, 켜 두면 익명 GET마다 요청 헤더까지 세션에 복사해 세션·힙을 늘리는 DoS 통로가 된다.
 				.requestCache(cache -> cache.disable())
@@ -102,6 +111,28 @@ class SecurityConfig {
 
 	}
 
+	/**
+	 * 관리자가 아닌 사용자의 multipart POST(/admin/**)를 본문을 읽기 전에 거절한다. CsrfFilter 앞에 두어,
+	 * getParameter()가 큰 본문(최대 20MB)을 파싱하기 전에 막는다. content-type 헤더만 보고 본문은 읽지 않는다.
+	 */
+	private static final class RejectUnauthenticatedAdminUpload extends OncePerRequestFilter {
+
+		@Override
+		protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+				throws ServletException, IOException {
+			String contentType = request.getContentType();
+			if ("POST".equalsIgnoreCase(request.getMethod()) && contentType != null
+					&& contentType.toLowerCase().startsWith("multipart/")
+					&& request.getRequestURI().startsWith("/admin/")
+					&& !isAdmin(SecurityContextHolder.getContext().getAuthentication())) {
+				response.sendError(HttpServletResponse.SC_FORBIDDEN);
+				return;
+			}
+			chain.doFilter(request, response);
+		}
+
+	}
+
 	/** 영문자가 섞인 아이디는 관리자 로그인, 그 밖(학번)은 학생 로그인으로 보낸다. 앞뒤 공백은 뗀다. */
 	private static AuthenticationProvider byUsername(AuthenticationProvider students, AuthenticationProvider admins) {
 		return new AuthenticationProvider() {
@@ -127,7 +158,8 @@ class SecurityConfig {
 	}
 
 	private static boolean isAdmin(Authentication authentication) {
-		return authentication.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+		return authentication != null
+				&& authentication.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
 	}
 
 	private static void securityHeaders(HeadersConfigurer<HttpSecurity> headers) {
