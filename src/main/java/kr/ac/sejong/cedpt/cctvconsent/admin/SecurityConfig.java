@@ -37,11 +37,15 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.WebAuthenticationDetails;
+import org.springframework.security.web.authentication.logout.SimpleUrlLogoutSuccessHandler;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.FlashMap;
+import org.springframework.web.servlet.FlashMapManager;
+import org.springframework.web.servlet.support.SessionFlashMapManager;
 
 /**
  * 관리자와 학생이 같은 로그인 화면(/login)을 쓴다. 아이디가 설정된 관리자 아이디와 같으면 관리자 계정(공용 계정 하나,
@@ -95,7 +99,7 @@ class SecurityConfig {
 						.failureUrl("/login?error"))
 				.logout(logout -> logout
 						.logoutUrl("/logout")
-						.logoutSuccessUrl("/login?logout"));
+						.logoutSuccessHandler(new LoggedOutNoticeHandler()));
 		return http.build();
 	}
 
@@ -109,6 +113,31 @@ class SecurityConfig {
 		protected String determineTargetUrl(HttpServletRequest request, HttpServletResponse response,
 				Authentication authentication) {
 			return isAdmin(authentication) ? "/admin" : "/consents";
+		}
+
+	}
+
+	/**
+	 * 로그아웃 뒤 /login으로 보내고, 안내("로그아웃했습니다")는 flash 속성(loggedOut)으로 넘겨 한 번만 보여 준다.
+	 * 주소(/login?logout)로 넘기면 새로고침할 때마다 안내가 다시 뜬다. 세션은 이미 무효화되어 flash용 새 세션이 생긴다.
+	 */
+	private static final class LoggedOutNoticeHandler extends SimpleUrlLogoutSuccessHandler {
+
+		private final FlashMapManager flashMaps = new SessionFlashMapManager();
+
+		LoggedOutNoticeHandler() {
+			setDefaultTargetUrl("/login");
+			setAlwaysUseDefaultTargetUrl(true);
+		}
+
+		@Override
+		public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response,
+				Authentication authentication) throws IOException, ServletException {
+			FlashMap flash = new FlashMap();
+			flash.put("loggedOut", true);
+			flash.setTargetRequestPath(request.getContextPath() + "/login");
+			flashMaps.saveOutputFlashMap(flash, request, response);
+			super.onLogoutSuccess(request, response, authentication);
 		}
 
 	}

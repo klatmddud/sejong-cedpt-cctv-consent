@@ -463,6 +463,20 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 	}
 
 	@Test
+	void logoutNoticeShowsOnlyOnce() throws Exception {
+		org.springframework.mock.web.MockHttpSession session = (org.springframework.mock.web.MockHttpSession) mvc
+				.perform(post("/logout").with(csrf()).with(student(STUDENT)))
+				.andExpect(redirectedUrl("/login"))
+				.andReturn().getRequest().getSession(false);
+		assertThat(session).isNotNull();
+		mvc.perform(get("/login").session(session))
+				.andExpect(content().string(Matchers.containsString("로그아웃했습니다.")));
+		// 새로고침하면 안내가 다시 뜨지 않는다
+		mvc.perform(get("/login").session(session))
+				.andExpect(content().string(Matchers.not(Matchers.containsString("로그아웃했습니다."))));
+	}
+
+	@Test
 	void consentPagesRequireStudentLogin() throws Exception {
 		mvc.perform(get("/consents")).andExpect(redirectedUrl("/login"));
 	}
