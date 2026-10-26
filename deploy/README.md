@@ -142,8 +142,9 @@ docker exec -it cctv-db psql -U cctv_consent      # DB 접속
   Caddyfile은 자동 배포되지 않습니다. 고치면 `scp deploy/Caddyfile oracle:~/caddy/Caddyfile` 후 위의 reload 명령을 실행합니다.
 - **배포 액션**: `deploy.yml`의 모든 서드파티 액션은 가변 태그가 아니라 커밋 SHA로 고정했습니다(공급망 공격 방지). 버전을 올릴 때는
   각 릴리스를 확인하고 SHA를 바꿉니다(주석에 태그 표시).
-- **배포 SSH 호스트 키 검증**: 서버에서 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub | cut -d' ' -f2`로 나온
+- **배포 SSH 호스트 키 검증**: 서버에서 `ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub | cut -d' ' -f2`로 나온
   지문(`SHA256:`로 시작)을 GitHub 저장소 시크릿 `SERVER_SSH_FINGERPRINT`에 넣습니다(`gh secret set SERVER_SSH_FINGERPRINT`).
-  그래야 배포 때 중간자(MITM) 공격을 막을 수 있습니다. 공개키(`ssh-keyscan` 출력)를 그대로 넣으면 배포가 실패합니다.
+  그래야 배포 때 중간자(MITM) 공격을 막을 수 있습니다. 배포 액션은 ECDSA 호스트 키로 접속하므로 ED25519 지문을 넣으면
+  `host key fingerprint mismatch`로 배포가 실패합니다. 공개키(`ssh-keyscan` 출력)를 그대로 넣어도 배포가 실패합니다.
   시크릿이 없거나 비어 있으면 아무 경고 없이 검증을 건너뜁니다.
 - **로컬 전용 설정**: `application-local.properties`와 `local` 패키지(테스트 계정)는 배포 jar에 들어가지 않습니다(`build.gradle`의 `bootJar`).
