@@ -20,6 +20,7 @@
 		<nav aria-label="관리자 메뉴">
 			<a th:href="@{/admin}" th:attr="aria-current=${active == 'dashboard'} ? 'page'">학기 현황</a>
 			<a th:href="@{/admin/roster}" th:attr="aria-current=${active == 'roster'} ? 'page'">명부 업로드</a>
+			<a th:href="@{/admin/login-locks}" th:attr="aria-current=${active == 'login-locks'} ? 'page'">로그인 제한</a>
 			<span class="nav-divider" aria-hidden="true"></span>
 			<form th:action="@{/logout}" method="post">
 				<button type="submit" class="nav-button">

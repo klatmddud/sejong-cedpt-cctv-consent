@@ -89,6 +89,51 @@ class LoginAttemptLimiterTest {
 	}
 
 	@Test
+	void listsBlockedKeysWithPrefixAndWhenTheyUnblock() {
+		Instant first = clock.instant();
+		limiter.recordFailure("s:1", POLICY);
+		clock.advance(Duration.ofMinutes(5));
+		limiter.recordFailure("s:1", POLICY);
+		limiter.recordFailure("s:1", POLICY);
+		limiter.recordFailure("s:2", POLICY);
+		for (int i = 0; i < 3; i++) {
+			limiter.recordFailure("other:1", POLICY);
+		}
+
+		assertThat(limiter.blocked("s:", POLICY))
+				.containsExactly(new LoginAttemptLimiter.Blocked("s:1", 3, first.plus(POLICY.window())));
+
+		clock.advance(Duration.ofMinutes(26));
+		assertThat(limiter.blocked("s:", POLICY)).isEmpty();
+	}
+
+	@Test
+	void countsOnlyRecordsWithinWindow() {
+		assertThat(limiter.count("k", POLICY)).isZero();
+		limiter.recordFailure("k", POLICY);
+		clock.advance(Duration.ofMinutes(20));
+		limiter.recordFailure("k", POLICY);
+		assertThat(limiter.count("k", POLICY)).isEqualTo(2);
+
+		clock.advance(Duration.ofMinutes(11));
+		assertThat(limiter.count("k", POLICY)).isEqualTo(1);
+	}
+
+	@Test
+	void allowOneMoreAttemptLeavesOneTryBeforeBlockingAgain() {
+		assertThat(limiter.allowOneMoreAttempt("k", POLICY)).isFalse();
+		for (int i = 0; i < 3; i++) {
+			limiter.recordFailure("k", POLICY);
+		}
+
+		assertThat(limiter.allowOneMoreAttempt("k", POLICY)).isTrue();
+		assertThat(limiter.isBlocked("k", POLICY)).isFalse();
+		assertThat(limiter.allowOneMoreAttempt("k", POLICY)).isFalse();
+		assertThat(limiter.tryReserve("k", POLICY)).isTrue();
+		assertThat(limiter.isBlocked("k", POLICY)).isTrue();
+	}
+
+	@Test
 	void removeExpiredDropsOldKeysOnly() {
 		limiter.recordFailure("old", POLICY);
 		clock.advance(Duration.ofMinutes(31));

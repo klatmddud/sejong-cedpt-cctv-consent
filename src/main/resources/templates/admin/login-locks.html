@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments :: head('로그인 제한')}"></head>
+<body>
+<header th:replace="~{admin/fragments :: nav('login-locks')}"></header>
+<main class="page">
+	<div class="page-head">
+		<div class="page-title">
+			<span class="eyebrow">로그인 제한</span>
+			<h1>로그인 잠금 관리</h1>
+			<p class="muted">세종대 포털 비밀번호를 24시간 안에 3번 틀린 학번은 로그인이 잠깁니다.
+				기록은 서버 메모리에만 있어 앱을 다시 시작하면 모두 풀립니다.</p>
+		</div>
+	</div>
+
+	<p class="alert ok" th:if="${notice}" th:text="${notice}">학번 20990001의 로그인 잠금을 풀었습니다.</p>
+	<p class="alert error" th:if="${error}" th:text="${error}">학번 20990001는 잠겨 있지 않습니다.</p>
+
+	<p class="note plain">
+		<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+			 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<circle cx="12" cy="12" r="10"></circle>
+			<path d="M12 16v-4"></path>
+			<path d="M12 8h.01"></path>
+		</svg>
+		<span>같은 IP(강의실 와이파이 등)에서 실패가 많아 잠긴 경우는 이 목록에 나오지 않습니다. 학생에게는 같은 안내가 보이며
+			30분 뒤 저절로 풀립니다.</span>
+	</p>
+
+	<section class="card">
+		<div class="card-head">
+			<h2 th:text="|잠긴 학번 ${#lists.size(locks)}명|">잠긴 학번 1명</h2>
+		</div>
+		<p class="muted" th:if="${#lists.isEmpty(locks)}">지금 잠긴 학번이 없습니다.</p>
+		<div class="table-wrap" th:unless="${#lists.isEmpty(locks)}">
+			<table>
+				<thead>
+				<tr>
+					<th>학번</th>
+					<th class="num">최근 24시간 해제</th>
+					<th>저절로 풀리는 시각</th>
+					<th class="num"><span class="visually-hidden">해제</span></th>
+				</tr>
+				</thead>
+				<tbody>
+				<tr th:each="lock : ${locks}">
+					<td class="tabular" th:text="${lock.studentId}">20990001</td>
+					<td class="num" th:text="${lock.unlocks == 0} ? '없음' : |${lock.unlocks}회|">없음</td>
+					<td class="tabular" th:text="${#temporals.format(lock.unlocksAt.atZone(T(java.time.ZoneId).of('Asia/Seoul')), 'yyyy-MM-dd HH:mm')}">2026-10-28 09:00</td>
+					<td class="num">
+						<form th:action="@{/admin/login-locks/unlock}" method="post">
+							<input type="hidden" name="studentId" th:value="${lock.studentId}">
+							<button type="submit" class="button outline small">해제</button>
+						</form>
+					</td>
+				</tr>
+				</tbody>
+			</table>
+		</div>
+	</section>
+</main>
+</body>
+</html>

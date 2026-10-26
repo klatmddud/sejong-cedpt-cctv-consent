@@ -7,6 +7,7 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import kr.ac.sejong.cedpt.cctvconsent.auth.StudentAuthenticationProvider;
 import kr.ac.sejong.cedpt.cctvconsent.consent.ConsentBundleService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.CourseDeletionService;
 import kr.ac.sejong.cedpt.cctvconsent.roster.RosterImportService;
@@ -56,16 +57,18 @@ class AdminController {
 	private final TargetRooms targetRooms;
 	private final ConsentBundleService bundles;
 	private final SemesterPurge semesterPurge;
+	private final StudentAuthenticationProvider studentLogins;
 
 	AdminController(RosterImportService importService, RosterQueryService queries,
 			CourseDeletionService courseDeletion, TargetRooms targetRooms, ConsentBundleService bundles,
-			SemesterPurge semesterPurge) {
+			SemesterPurge semesterPurge, StudentAuthenticationProvider studentLogins) {
 		this.importService = importService;
 		this.queries = queries;
 		this.courseDeletion = courseDeletion;
 		this.targetRooms = targetRooms;
 		this.bundles = bundles;
 		this.semesterPurge = semesterPurge;
+		this.studentLogins = studentLogins;
 	}
 
 	@GetMapping
@@ -266,6 +269,28 @@ class AdminController {
 	String cancelRoster(HttpSession session) {
 		session.removeAttribute(PENDING_ROSTER);
 		return "redirect:/admin/roster";
+	}
+
+	/** 비밀번호를 여러 번 틀려 로그인이 잠긴 학번. 기록은 서버 메모리에만 있다. */
+	@GetMapping("/login-locks")
+	String loginLocks(Model model) {
+		model.addAttribute("locks", studentLogins.lockedStudents());
+		return "admin/login-locks";
+	}
+
+	/** 학번 잠금을 풀어 한 번 더 시도할 수 있게 한다(포털 계정 잠김 방지). 감사 로그에는 학번을 남기지 않는다. */
+	@PostMapping("/login-locks/unlock")
+	String unlockStudent(@RequestParam String studentId, RedirectAttributes redirect) {
+		String id = studentId.strip();
+		if (studentLogins.unlock(id)) {
+			AdminAudit.log("학생 로그인 제한 해제: 1회 시도 허용");
+			redirect.addFlashAttribute("notice",
+					"학번 %s의 로그인 잠금을 풀었습니다. 한 번 더 틀리면 다시 잠깁니다.".formatted(id));
+		}
+		else {
+			redirect.addFlashAttribute("error", "학번 %s는 잠겨 있지 않습니다. 이미 풀렸을 수 있습니다.".formatted(id));
+		}
+		return "redirect:/admin/login-locks";
 	}
 
 	private static RosterImportService.Result audited(RosterImportService.ParsedRoster roster,

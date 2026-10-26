@@ -176,6 +176,60 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 		}
 	}
 
+	@Test
+	void adminUnlocksStudentForOneMoreTry() throws Exception {
+		String id = "20019998";
+		String ip = "10.9.6.1";
+		when(authenticator.authenticate(id, "wrong"))
+				.thenThrow(new SejongAuthException(SejongAuthException.Reason.INVALID_CREDENTIALS, "wrong"));
+		when(authenticator.authenticate(id, "pw"))
+				.thenReturn(new StudentLogin(new SejongStudent(id, "홍길동"), TERM, List.of()));
+		try {
+			for (int i = 0; i < 3; i++) {
+				mvc.perform(loginFrom(ip, id, "wrong")).andExpect(unauthenticated());
+			}
+			var admin = org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors
+					.user("admin").roles("ADMIN");
+			mvc.perform(get("/admin/login-locks").with(admin))
+					.andExpect(status().isOk())
+					.andExpect(content().string(Matchers.containsString(id)))
+					.andExpect(content().string(Matchers.containsString("없음")));
+
+			mvc.perform(post("/admin/login-locks/unlock").param("studentId", id).with(csrf()).with(admin))
+					.andExpect(redirectedUrl("/admin/login-locks"))
+					.andExpect(flash().attribute("notice", Matchers.containsString(id)));
+			mvc.perform(get("/admin/login-locks").with(admin))
+					.andExpect(content().string(Matchers.not(Matchers.containsString(id))));
+
+			// 한 번만 더 포털에 보낸다. 또 틀리면 다시 막혀 다섯 번째는 포털에 가지 않는다(포털 5회 잠김 방지)
+			mvc.perform(loginFrom(ip, id, "wrong")).andExpect(unauthenticated());
+			mvc.perform(loginFrom(ip, id, "wrong")).andExpect(unauthenticated());
+			verify(authenticator, times(4)).authenticate(id, "wrong");
+			// 관리자가 포털 잠김 위험을 판단하도록 해제 횟수를 보여 준다
+			mvc.perform(get("/admin/login-locks").with(admin))
+					.andExpect(content().string(Matchers.containsString(id)))
+					.andExpect(content().string(Matchers.containsString("1회")));
+
+			// 다시 풀면 맞는 비밀번호로 로그인할 수 있고, 성공하면 실패 기록이 모두 지워진다
+			mvc.perform(post("/admin/login-locks/unlock").param("studentId", id).with(csrf()).with(admin))
+					.andExpect(flash().attribute("notice", Matchers.containsString(id)));
+			mvc.perform(loginFrom(ip, id, "pw")).andExpect(authenticated());
+			// 실패 기록과 해제 기록이 모두 지워진다
+			var day = new kr.ac.sejong.cedpt.cctvconsent.auth.LoginAttemptLimiter.Policy(1, java.time.Duration.ofHours(24));
+			assertThat(limiter.count("student:" + id, day)).isZero();
+			assertThat(limiter.count("student-unlock:" + id, day)).isZero();
+
+			mvc.perform(post("/admin/login-locks/unlock").param("studentId", id).with(csrf()).with(admin))
+					.andExpect(flash().attribute("error", Matchers.containsString("잠겨 있지 않습니다")));
+		}
+		finally {
+			limiter.reset("student:" + id);
+			limiter.reset("student-unlock:" + id);
+			limiter.reset("student-ip:" + ip);
+			limiter.reset("student-all");
+		}
+	}
+
 	private static org.springframework.test.web.servlet.RequestBuilder loginFrom(String ip, String id, String password) {
 		return post("/login").param("username", id).param("password", password).with(csrf()).with(request -> {
 			request.setRemoteAddr(ip);

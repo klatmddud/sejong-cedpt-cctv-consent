@@ -50,6 +50,9 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 	static final LoginAttemptLimiter.Policy SPIKE = new LoginAttemptLimiter.Policy(30, Duration.ofMinutes(10));
 	static final LoginAttemptLimiter.Policy PER_IP_UNDER_ATTACK = new LoginAttemptLimiter.Policy(2, PER_IP.window());
 	private static final String ALL_STUDENTS = "student-all";
+	private static final String STUDENT_KEY = "student:";
+	// 관리자가 학번 잠금을 푼 기록. 해제할 때마다 포털에 한 번 더 가므로 관리자가 포털 잠김 위험을 판단하도록 횟수를 보여 준다
+	private static final String UNLOCK_KEY = "student-unlock:";
 	static final int MAX_PORTAL_CALLS = 8;
 	// 한 반이 함께 로그인하면 잠깐 몰린다. 바로 "잠시 후 다시"를 보이지 않고 앞사람 포털 응답(보통 1~2초)을 기다린다
 	static final Duration PORTAL_WAIT = Duration.ofSeconds(3);
@@ -72,6 +75,41 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 		this.enrollmentSync = enrollmentSync;
 	}
 
+	/**
+	 * 비밀번호를 학번당 한도(PER_STUDENT)만큼 틀려 로그인이 막힌 학번.
+	 *
+	 * @param unlocks 최근 PER_STUDENT 기간(24시간)에 관리자가 푼 횟수. 막힐 때까지 포털에 간 횟수는 한도 + 이 값이다
+	 * @param unlocksAt 관리자가 풀지 않아도 저절로 풀리는 시각
+	 */
+	public record LockedStudent(String studentId, int unlocks, Instant unlocksAt) {
+	}
+
+	/** 지금 로그인이 막힌 학번. 먼저 풀리는 순서다. */
+	public List<LockedStudent> lockedStudents() {
+		return limiter.blocked(STUDENT_KEY, PER_STUDENT).stream()
+				.map(blocked -> {
+					String studentId = blocked.key().substring(STUDENT_KEY.length());
+					return new LockedStudent(studentId, limiter.count(UNLOCK_KEY + studentId, PER_STUDENT),
+							blocked.unblocksAt());
+				})
+				.toList();
+	}
+
+	/**
+	 * 관리자가 학번 잠금을 풀어 한 번 더 시도할 수 있게 한다. 실패 기록을 모두 지우지 않으므로 또 틀리면 다시 막힌다.
+	 * 해제 횟수에는 제한을 두지 않는다. 해제할 때마다 포털에 한 번 더 가므로(포털은 5회 실패하면 계정을 잠근다)
+	 * 판단은 관리자에게 맡기고, 판단할 수 있도록 해제 횟수를 기록해 보여 준다. 로그인에 성공하면 두 기록 모두 지운다.
+	 *
+	 * @return 막혀 있어서 풀었으면 true
+	 */
+	public boolean unlock(String studentId) {
+		if (!limiter.allowOneMoreAttempt(STUDENT_KEY + studentId, PER_STUDENT)) {
+			return false;
+		}
+		limiter.recordFailure(UNLOCK_KEY + studentId, PER_STUDENT);
+		return true;
+	}
+
 	@Override
 	public Authentication authenticate(Authentication authentication) {
 		String studentId = authentication.getName() == null ? "" : authentication.getName().trim();
@@ -80,7 +118,7 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 			throw new BadCredentialsException("login.error.format");
 		}
 
-		String studentKey = "student:" + studentId;
+		String studentKey = STUDENT_KEY + studentId;
 		String ipKey = "student-ip:" + remoteAddress(authentication);
 		if (!inFlight.add(studentKey)) {
 			throw new LockedException("login.error.busy");
@@ -132,6 +170,7 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 		try {
 			StudentLogin login = authenticator.authenticate(studentId, password);
 			limiter.reset(studentKey);
+			limiter.reset(UNLOCK_KEY + studentId);
 			return login;
 		}
 		catch (SejongAuthException ex) {
