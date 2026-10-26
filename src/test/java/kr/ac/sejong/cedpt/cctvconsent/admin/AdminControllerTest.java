@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.servlet.RequestDispatcher;
+import java.net.URI;
 import java.util.List;
 import kr.ac.sejong.cedpt.cctvconsent.PostgresTestSupport;
 import kr.ac.sejong.cedpt.cctvconsent.roster.EnrollmentSync;
@@ -411,6 +412,21 @@ class AdminControllerTest extends PostgresTestSupport {
 						.with(user("admin").roles("ADMIN")).with(csrf()))
 				.andExpect(redirectedUrl("/admin/roster"))
 				.andExpect(flash().attribute("error", Matchers.containsString("xlsx")));
+	}
+
+	@Test
+	void rejectsAnonymousUploadBeforeReadingBody() throws Exception {
+		MockMultipartFile file = new MockMultipartFile("file", "명부.xlsx", null, new byte[] {1});
+
+		// 필터가 없으면 로그인 화면으로 보낸다(302). 그 전에 CsrfFilter가 본문을 파싱한다
+		mvc.perform(multipart("/admin/roster").file(file).with(csrf()))
+				.andExpect(status().isForbidden());
+		// 디코딩 전 주소(getRequestURI)로 비교하면 /%61dmin/roster는 /admin/으로 시작하지 않아 빠져나갔다
+		mvc.perform(multipart(URI.create("/%61dmin/roster")).file(file).with(csrf()))
+				.andExpect(status().isForbidden());
+		// Tomcat은 content-type을 대소문자 구분 없이 multipart로 파싱한다
+		mvc.perform(multipart("/admin/roster").file(file).with(csrf()).contentType("MULTIPART/FORM-DATA"))
+				.andExpect(status().isForbidden());
 	}
 
 	@Test

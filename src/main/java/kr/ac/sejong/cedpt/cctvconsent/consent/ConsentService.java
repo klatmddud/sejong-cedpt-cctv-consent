@@ -96,7 +96,14 @@ public class ConsentService {
 
 		OffsetDateTime signedAt = OffsetDateTime.now(SEOUL);
 		// 동의서 양식에는 수업 정보가 없으므로 선택한 수업 모두 같은 PDF를 갖는다
-		byte[] pdf = renderer.render(ConsentLanguage.KO, signerName, signedAt.atZoneSameInstant(SEOUL), signature);
+		byte[] pdf;
+		try {
+			pdf = renderer.render(ConsentLanguage.KO, signerName, signedAt.atZoneSameInstant(SEOUL), signature);
+		}
+		catch (ConsentPdfRenderer.RenderBusyException ex) {
+			// 한 반이 함께 제출하면 렌더 슬롯이 찬다. 503 오류 화면 대신 작성 화면으로 돌려보내 고른 수업을 남긴다
+			throw new ConsentException("consent.error.busy");
+		}
 		try {
 			Integer saved = transactions.execute(
 					status -> save(studentId, ids, shownLanguage, signerName, signedAt, signature, pdf));

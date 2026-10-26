@@ -1,8 +1,10 @@
 package kr.ac.sejong.cedpt.cctvconsent.consent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -52,6 +54,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -76,6 +79,9 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 
 	@MockitoBean
 	StudentAuthenticator authenticator;
+
+	@MockitoSpyBean
+	ConsentPdfRenderer renderer;
 
 	@Autowired
 	kr.ac.sejong.cedpt.cctvconsent.auth.LoginAttemptLimiter limiter;
@@ -175,6 +181,36 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 			request.setRemoteAddr(ip);
 			return request;
 		});
+	}
+
+	@Test
+	void doesNotTightenPerIpLimitDuringPortalOutage() throws Exception {
+		when(authenticator.authenticate(anyString(), anyString()))
+				.thenThrow(new SejongAuthException(SejongAuthException.Reason.UNAVAILABLE, "down"));
+		try {
+			// 포털이 죽은 동안 여러 강의실에서 30명이 로그인한다. 공격이 아니므로 급증으로 보지 않는다
+			for (int i = 0; i < 30; i++) {
+				mvc.perform(loginFrom("10.9.4." + i, "2007%04d".formatted(i), "pw")).andExpect(unauthenticated());
+			}
+			doThrow(new SejongAuthException(SejongAuthException.Reason.INVALID_CREDENTIALS, "wrong"))
+					.when(authenticator).authenticate(anyString(), anyString());
+			// 평소 한도(30분에 10회)라 새 IP가 학번 3개를 모두 포털에 묻는다(급증 중이면 2개)
+			for (int i = 1; i <= 3; i++) {
+				mvc.perform(loginFrom("10.9.5.1", "2008000" + i, "wrong")).andExpect(unauthenticated());
+			}
+			verify(authenticator).authenticate("20080003", "wrong");
+		}
+		finally {
+			// limiter는 테스트끼리 공유하므로 이 테스트가 남긴 기록을 지운다
+			limiter.reset("student-all");
+			limiter.reset("student-ip:10.9.5.1");
+			for (int i = 0; i < 30; i++) {
+				limiter.reset("student-ip:10.9.4." + i);
+			}
+			for (int i = 1; i <= 3; i++) {
+				limiter.reset("student:2008000" + i);
+			}
+		}
 	}
 
 	@Test
@@ -511,6 +547,25 @@ class StudentConsentFlowTest extends PostgresTestSupport {
 		mvc.perform(get("/consents/sign").with(student(STUDENT)).flashAttrs(rejected.getFlashMap()))
 				.andExpect(content().string(checkedCourse(second)))
 				.andExpect(content().string(Matchers.not(checkedCourse(first))));
+	}
+
+	@Test
+	void sendsBackToFormWhenPdfRenderIsBusy() throws Exception {
+		long second = enrollmentId(STUDENT, "000305-001");
+		doThrow(new ConsentPdfRenderer.RenderBusyException()).when(renderer)
+				.render(any(), anyString(), any(), any());
+
+		// 503 오류 화면이 아니라 작성 화면으로 돌아가 고른 수업을 남긴다
+		MvcResult busy = mvc.perform(post("/consents/sign").with(student(STUDENT)).with(csrf())
+						.param("enrollmentIds", String.valueOf(second))
+						.param("agreed", "true")
+						.param("signature", SignatureFixtures.dataUrl(SignatureFixtures.png())))
+				.andExpect(redirectedUrl("/consents/sign"))
+				.andExpect(flash().attribute("error", Matchers.containsString("잠시 후")))
+				.andReturn();
+		mvc.perform(get("/consents/sign").with(student(STUDENT)).flashAttrs(busy.getFlashMap()))
+				.andExpect(content().string(checkedCourse(second)));
+		assertThat(jdbc.queryForObject("select count(*) from consent", Integer.class)).isZero();
 	}
 
 	private void submit(String studentId, long enrollmentId) throws Exception {

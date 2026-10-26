@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component;
  * 세종대 포털은 5회 실패하면 비밀번호를 초기화해야 하므로, 우리 서버를 통한 실패는 학번당 24시간에 3회로 막는다
  * (짧은 기간이면 기간이 지날 때마다 다시 시도할 수 있어 포털 실패가 5회를 넘는다).
  * 같은 IP에서 여러 학번을 시도하는 것도 30분에 10회로 막는다.
- * 남의 학번으로 일부러 틀려 잠그는 공격은 학번별 제한만으로는 막을 수 없다(잠그는 것이 목적이므로). 서버 전체 실패가
+ * 남의 학번으로 일부러 틀려 잠그는 공격은 학번별 제한만으로는 막을 수 없다(잠그는 것이 목적이므로). 서버 전체 비밀번호 실패가
  * 10분에 SPIKE개를 넘으면 공격으로 보고, 그동안은 IP당 한도를 PER_IP_UNDER_ATTACK으로 줄여 IP 하나로 잠글 수 있는
  * 학번 수를 줄이고 감사 로그에 남긴다. 완전히 막으려면 CAPTCHA가 필요하다.
  * 학번별 실패는 포털에 묻기 전에 확인과 함께 미리 센다(tryReserve). 동시에 보낸 요청이 모두 한도 확인을 통과하지 못하게 하고, 같은 학번 시도는
@@ -135,13 +135,15 @@ public class StudentAuthenticationProvider implements AuthenticationProvider {
 			return login;
 		}
 		catch (SejongAuthException ex) {
-			// 포털까지 간 실패는 이유와 무관하게 IP 한도와 SPIKE에 센다. 예전엔 비밀번호 오류만 셌는데,
+			// 포털까지 간 실패는 이유와 무관하게 IP 한도에 센다. 예전엔 비밀번호 오류만 셌는데,
 			// 포털이 '계정 제한/장애'로 응답하는 시도를 학번만 바꿔 쏟아부으면 스레드와 포털 슬롯을 계속
 			// 붙잡으면서도 어떤 IP 한도에도 걸리지 않았다(스레드 고갈 DoS). 절충: 포털 장애가 길어지면
 			// 같은 IP(강의실 와이파이)가 30분에 10회로 잠시 막힐 수 있다.
 			limiter.recordFailure(ipKey, PER_IP);
-			recordStudentFailure();
 			if (ex.getReason() == SejongAuthException.Reason.INVALID_CREDENTIALS) {
+				// SPIKE는 남의 학번을 일부러 틀려 잠그는 공격을 알아내려는 것이라 비밀번호 오류만 센다.
+				// 포털 장애까지 세면 장애 몇 분 만에 공격 모드(IP당 2회)가 켜져 강의실 와이파이 전체가 막힌다
+				recordStudentFailure();
 				throw new BadCredentialsException("login.error.invalid");
 			}
 			// 비밀번호 오류가 아니면 학번당 한도는 되돌린다(포털 장애로 한 학생이 24시간 잠기지 않게).

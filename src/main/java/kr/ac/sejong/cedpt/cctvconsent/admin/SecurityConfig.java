@@ -39,6 +39,8 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationSu
 import org.springframework.security.web.authentication.WebAuthenticationDetails;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -112,18 +114,21 @@ class SecurityConfig {
 	}
 
 	/**
-	 * 관리자가 아닌 사용자의 multipart POST(/admin/**)를 본문을 읽기 전에 거절한다. CsrfFilter 앞에 두어,
+	 * 관리자가 아닌 사용자의 multipart 요청(/admin/**)을 본문을 읽기 전에 거절한다. CsrfFilter 앞에 두어,
 	 * getParameter()가 큰 본문(최대 20MB)을 파싱하기 전에 막는다. content-type 헤더만 보고 본문은 읽지 않는다.
+	 * 경로는 authorizeHttpRequests와 같은 매처로 본다. getRequestURI()는 디코딩 전이라 /%61dmin/roster로 우회된다.
 	 */
 	private static final class RejectUnauthenticatedAdminUpload extends OncePerRequestFilter {
+
+		// 메서드는 가리지 않는다(authorizeHttpRequests의 /admin/**와 범위를 맞춘다)
+		private static final RequestMatcher ADMIN = PathPatternRequestMatcher.withDefaults().matcher("/admin/**");
 
 		@Override
 		protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
 				throws ServletException, IOException {
 			String contentType = request.getContentType();
-			if ("POST".equalsIgnoreCase(request.getMethod()) && contentType != null
-					&& contentType.toLowerCase().startsWith("multipart/")
-					&& request.getRequestURI().startsWith("/admin/")
+			if (contentType != null && contentType.regionMatches(true, 0, "multipart/", 0, "multipart/".length())
+					&& ADMIN.matches(request)
 					&& !isAdmin(SecurityContextHolder.getContext().getAuthentication())) {
 				response.sendError(HttpServletResponse.SC_FORBIDDEN);
 				return;
