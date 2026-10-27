@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spring Boot 기본 콘솔 로그에 더해, 감사 로그("audit" 로거)만 파일에도 남긴다.
+  배포 때마다 컨테이너를 지우고 새로 만들어 docker logs가 사라지므로, 서버에서는 이 파일을 volume에 둔다
+  (Dockerfile의 AUDIT_LOG_DIR, deploy.yml의 -v cctv_app_logs:/app/logs). 소스에서 실행하면 build/logs에 쓴다.
+-->
+<configuration>
+	<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+	<include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+	<springProperty name="AUDIT_LOG_DIR" source="audit.log-dir" defaultValue="build/logs"/>
+
+	<!-- 날짜(KST)별로 파일을 나누고 1년이 지나면 지운다. 시각, IP, 작업, 건수만 있고 학번·이름은 없다 -->
+	<appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>${AUDIT_LOG_DIR}/audit.log</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<fileNamePattern>${AUDIT_LOG_DIR}/audit.%d{yyyy-MM-dd, Asia/Seoul}.log.gz</fileNamePattern>
+			<maxHistory>365</maxHistory>
+			<totalSizeCap>500MB</totalSizeCap>
+			<cleanHistoryOnStart>true</cleanHistoryOnStart>
+		</rollingPolicy>
+		<encoder>
+			<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS, Asia/Seoul} %-5level %msg%n</pattern>
+			<charset>UTF-8</charset>
+		</encoder>
+	</appender>
+
+	<!-- additivity 기본값(true)이라 콘솔(docker logs)에도 그대로 나온다 -->
+	<logger name="audit" level="INFO">
+		<appender-ref ref="AUDIT_FILE"/>
+	</logger>
+
+	<root level="INFO">
+		<appender-ref ref="CONSOLE"/>
+	</root>
+</configuration>

@@ -27,7 +27,7 @@ flowchart LR
 | 컨테이너 | 이미지 | 역할 |
 |---|---|---|
 | `caddy` | `caddy:2` | 80/443 공개, Let's Encrypt 인증서 자동 발급, `cctv-consent:8080`으로 프록시 |
-| `cctv-consent` | `ghcr.io/klatmddud/sejong-cedpt-cctv-consent` | 앱. 외부 포트 없음. GitHub Actions가 `main` push마다 교체 |
+| `cctv-consent` | `ghcr.io/klatmddud/sejong-cedpt-cctv-consent` | 앱. 외부 포트 없음. GitHub Actions가 `main` push마다 교체. 감사 로그는 `cctv_app_logs` volume |
 | `cctv-db` | `postgres:17` | DB. 외부 포트 없음. 데이터는 `cctv_db_data` volume |
 
 ### 비밀 값
@@ -103,8 +103,10 @@ docker run -d --name caddy --restart unless-stopped --network web -p 80:80 -p 44
 ## 자주 쓰는 명령
 
 ```bash
-docker logs -f cctv-consent                       # 앱 로그
-docker logs cctv-consent 2>&1 | grep audit        # 관리자 작업 감사 로그
+docker logs -f cctv-consent                       # 앱 로그 (지금 컨테이너 것만)
+docker exec cctv-consent tail -f /app/logs/audit.log   # 감사 로그 실시간
+docker exec cctv-consent ls /app/logs             # 지난 감사 로그 (audit.날짜.log.gz)
+docker exec cctv-consent zcat /app/logs/audit.2026-10-27.log.gz   # 지난 날짜 감사 로그 보기
 docker exec caddy caddy reload --config /etc/caddy/Caddyfile   # Caddyfile 수정 후
 docker exec -it cctv-db psql -U cctv_consent      # DB 접속
 ```
@@ -135,7 +137,9 @@ docker exec -it cctv-db psql -U cctv_consent      # DB 접속
 ### 로그와 데이터
 
 - **감사 로그**: 관리자 로그인 성공·실패·차단, 명부 반영, 과목 삭제, 동의서 일괄 다운로드를 `audit` 로거로 남깁니다
-  (시각, IP, 작업, 건수. 학번·이름은 남기지 않습니다). 컨테이너를 다시 만들면 로그가 사라지므로 필요하면 그 전에 저장합니다.
+  (시각, IP, 작업, 건수. 학번·이름은 남기지 않습니다). 감사 로그는 `cctv_app_logs` volume의 `/app/logs/audit.log`에도 쓰므로
+  배포로 컨테이너를 다시 만들어도 남습니다. 날짜(KST)별로 `audit.날짜.log.gz`로 나뉘고, 1년이 지나면(또는 합계 500MB를 넘으면) 지워집니다.
+  `docker logs`의 앱 로그는 컨테이너를 다시 만들면 사라지고, 크기는 10MB씩 3개까지만 둡니다.
 - **동의서 파기**: 매일 04:00(KST)에 파기 예정일(학기 종료 1년 뒤)이 된 학기를 과목, 수강, 동의서와 함께 지웁니다.
   1학기는 6월 30일, 2학기는 12월 31일에 끝납니다.
 

@@ -15,6 +15,10 @@ FROM eclipse-temurin:25-jre
 WORKDIR /app
 
 RUN useradd --system --uid 1001 spring
+# 감사 로그 파일 위치(src/main/resources/logback-spring.xml). deploy.yml이 named volume을 여기에 붙인다.
+# 빈 volume은 처음 붙일 때 이 디렉터리의 소유자(spring)를 그대로 받으므로 앱이 쓸 수 있다.
+RUN mkdir /app/logs && chown spring /app/logs
+ENV AUDIT_LOG_DIR=/app/logs
 USER spring
 
 COPY --from=build /workspace/build/libs/*.jar app.jar
