@@ -58,6 +58,23 @@ class SjptClientTest {
 	}
 
 	@Test
+	void detectsRetiredStudentFromUserInfo() {
+		String graduate = """
+				{"dm_UserInfo":{"INTG_USR_NO":"20010001"},
+				 "dm_UserInfoGam":{"RPSN_ROLE_CD_NM":"대표【학부,대학원】졸업생"},
+				 "dm_UserInfoSch":{"USER_CLSF_CD_NM":"학부생","RETIRE_YN":"Y"}}""";
+		String student = """
+				{"dm_UserInfo":{"INTG_USR_NO":"20010001"},
+				 "dm_UserInfoGam":{"RPSN_ROLE_CD_NM":"대표【대학원】재학생"},
+				 "dm_UserInfoSch":{"USER_CLSF_CD_NM":"대학원생","RETIRE_YN":""}}""";
+
+		assertThat(SjptClient.retired(SjptClient.parseResponse("/x.do", graduate))).isTrue();
+		assertThat(SjptClient.retired(SjptClient.parseResponse("/x.do", student))).isFalse();
+		// 학사 사용자 정보가 없으면 재학생으로 보고 수강 과목을 조회한다
+		assertThat(SjptClient.retired(SjptClient.parseResponse("/x.do", "{\"dm_UserInfo\":{}}"))).isFalse();
+	}
+
+	@Test
 	void returnsJsonObject() {
 		assertThat(SjptClient.parseResponse("/x.do", "{\"dl_main\":[{\"CURI_NO\":\"000304\"}]}")
 				.path("dl_main").get(0).get("CURI_NO").asString()).isEqualTo("000304");

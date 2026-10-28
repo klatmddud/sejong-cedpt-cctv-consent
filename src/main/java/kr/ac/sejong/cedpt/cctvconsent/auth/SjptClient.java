@@ -61,12 +61,17 @@ public class SjptClient implements StudentAuthenticator {
 	/**
 	 * sjpt 사용자 정보로 학번과 이름을 확인하고, 같은 세션으로 현재 학기 수강 과목을 조회한다.
 	 * 수강 과목 조회만 실패하면 로그인은 성공시키고 courses를 null로 돌려준다.
+	 * 졸업생 등 학적이 끝난 학생은 sjpt에 수강내역조회 메뉴가 없으므로 조회하지 않고 수강 과목 없음으로 돌려준다.
 	 */
 	@Override
 	public StudentLogin authenticate(String studentId, String password) {
 		AcademicTerm term = AcademicTerm.current(clock);
 		return inSession(studentId, password, (session, user) -> {
 			SejongStudent student = new SejongStudent(user.userNo(), user.name());
+			if (user.retired()) {
+				log.info("sjpt 학적이 끝난 학생이라 수강 과목을 조회하지 않음 ({}-{}학기)", term.year(), term.term());
+				return new StudentLogin(student, term, List.of());
+			}
 			try {
 				return new StudentLogin(student, term, courses(session, user, term));
 			}
@@ -117,8 +122,9 @@ public class SjptClient implements StudentAuthenticator {
 
 	/**
 	 * @param loginKey 로그인 키 (RUNNING_SEJONG). addParam에 넣는 값이므로 로그에 남기지 않는다.
+	 * @param retired 졸업, 제적 등으로 학적이 끝났는지
 	 */
-	private record SjptUser(String userNo, String loginKey, String name) {
+	private record SjptUser(String userNo, String loginKey, String name, boolean retired) {
 	}
 
 	/**
@@ -151,7 +157,8 @@ public class SjptClient implements StudentAuthenticator {
 					"sjpt SSO 로그인에 실패했습니다: " + sso.uri().getHost() + sso.uri().getPath());
 		}
 
-		JsonNode userInfo = call(session, USER_INFO_URI, null, Map.of()).path("dm_UserInfo");
+		JsonNode response = call(session, USER_INFO_URI, null, Map.of());
+		JsonNode userInfo = response.path("dm_UserInfo");
 		String userNo = text(userInfo, "INTG_USR_NO");
 		String loginKey = text(userInfo, "RUNNING_SEJONG");
 		String name = text(userInfo, "INTG_USR_NM");
@@ -163,7 +170,15 @@ public class SjptClient implements StudentAuthenticator {
 			throw new SejongAuthException(SejongAuthException.Reason.UNEXPECTED_RESPONSE,
 					"sjpt에서 조회된 학번이 입력한 학번과 다릅니다.");
 		}
-		return new SjptUser(userNo, loginKey, name);
+		return new SjptUser(userNo, loginKey, name, retired(response));
+	}
+
+	/**
+	 * 사용자 정보 응답에서 학적이 끝났는지. 학사 사용자 정보의 RETIRE_YN이 재학생은 빈 값, 졸업생은 Y다.
+	 * (대표 역할 RPSN_ROLE_CD_NM에도 '졸업생'이 나오지만 표시용 이름이라 쓰지 않는다)
+	 */
+	static boolean retired(JsonNode userInfoResponse) {
+		return "Y".equals(text(userInfoResponse.path("dm_UserInfoSch"), "RETIRE_YN"));
 	}
 
 	/**
